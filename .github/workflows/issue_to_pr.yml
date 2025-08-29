@@ -1,0 +1,144 @@
+name: Issue to PR (proposal)
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+
+jobs:
+  convert:
+    if: |
+      contains(join(github.event.issue.labels.*.name, ','), 'proposal')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract fields from Issue body
+        id: extract
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            function pick(id) {
+              const re = new RegExp(`###\\s+${id}\\n([\\s\\S]*?)(?:\\n### |$)`, 'm');
+              const m = body.match(re);
+              return m ? m[1].trim() : '';
+            }
+            // Issue Formsではidを見出し化できないため、id順序でのfallbackも考慮
+            const target = pick('対象ルール（ファイル名）') || pick('対象ルール') || pick('target') || '';
+            const effective = pick('施行日（YYYY-MM-DD）') || pick('施行日') || pick('effective_date') || '';
+            const background = pick('背景') || '';
+            const proposal = pick('変更案') || '';
+            const impact = pick('影響チェック（該当するものにチェック）') || pick('影響チェック') || '';
+
+            if (!target) core.setFailed('対象ルールが取得できませんでした');
+            if (!effective) core.setFailed('施行日が取得できませんでした');
+
+            core.setOutput('target', target);
+            core.setOutput('effective', effective);
+            core.setOutput('background', background);
+            core.setOutput('proposal', proposal);
+            core.setOutput('impact', impact);
+
+      - name: Create branch and update rule file
+        id: change
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const target = core.getInput('target', { required: true });
+            const effective = core.getInput('effective', { required: true });
+            const background = core.getInput('background') || '';
+            const proposal = core.getInput('proposal') || '';
+            const impact = core.getInput('impact') || '';
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const { data: repoData } = await github.repos.get({ owner, repo });
+            const baseRef = 'heads/' + (process.env.GITHUB_BASE_REF || 'main');
+            const { data: base } = await github.git.getRef({ owner, repo, ref: baseRef }).catch(async () => {
+              // fallback to default branch
+              const def = repoData.default_branch || 'main';
+              return { data: await github.git.getRef({ owner, repo, ref: 'heads/' + def }).then(r=>r.data) };
+            });
+
+            const branch = `proposal-${context.issue.number}`;
+            // create branch
+            try {
+              await github.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: base.object.sha });
+            } catch (e) {
+              if (e.status !== 422) throw e; // already exists
+            }
+
+            // sanitize path
+            const fileName = target.replace(/^\\/|\\\/g, '').replace(/^rules\\\//, '');
+            const path = `rules/${fileName}`;
+
+            // fetch file if exists
+            let content = '';
+            let sha = undefined;
+            try {
+              const res = await github.repos.getContent({ owner, repo, path, ref: branch });
+              if (!Array.isArray(res.data)) {
+                content = Buffer.from(res.data.content, res.data.encoding).toString('utf8');
+                sha = res.data.sha;
+              }
+            } catch (e) {
+              // new file
+              content = `# ${fileName.replace(/_/g,' ').replace(/\\.md$/,'')}\n\n`;
+            }
+
+            const block = [
+              `\n\n---`,
+              `## 改定案（施行日: ${effective}）`,
+              `背景:\n${background}`,
+              `変更案:\n${proposal}`,
+              `影響チェック:\n${impact}`,
+              `関連Issue: #${context.issue.number}`,
+            ].join('\n');
+
+            const newContent = content + block + '\n';
+            const message = `[proposal] ${path} の改定案追加 (施行日: ${effective})\n\nref: #${context.issue.number}`;
+
+            await github.repos.createOrUpdateFileContents({
+              owner, repo, path,
+              message,
+              content: Buffer.from(newContent, 'utf8').toString('base64'),
+              branch,
+              sha,
+            });
+
+            core.setOutput('branch', branch);
+            core.setOutput('path', path);
+
+      - name: Create Pull Request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = core.getInput('branch', { required: true });
+            const path = core.getInput('path', { required: true });
+            const effective = core.getInput('effective', { required: true });
+
+            const { data: pr } = await github.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[提案] ${path} の改定（施行日: ${effective}）`,
+              head: branch,
+              base: 'main',
+              body: [
+                `このPRはIssue #${context.issue.number} から自動生成されました。`,
+                `- 対象: ${path}`,
+                `- 施行日: ${effective}`,
+                `- 差分を確認し、必要なレビュアが承認後マージしてください。`,
+              ].join('\n'),
+            });
+            core.info(`PR #${pr.number} created`);
+

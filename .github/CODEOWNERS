@@ -1,0 +1,6 @@
+# ルールごとの必須レビュアを指定してください。
+# 例: /rules/02_受付.md @dept-reception-lead @Yusuke0018
+
+# デフォルト（指定がないルールは院長レビュー必須）
+/rules/* @Yusuke0018
+

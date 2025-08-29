@@ -1,0 +1,69 @@
+name: Notify and Pages Update
+
+on:
+  pull_request:
+    types: [closed]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  after-merge:
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[pages]'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build docs (copy rules and index)
+        run: |
+          mkdir -p docs/rules
+          cp -f rules/*.md docs/rules/ 2>/dev/null || true
+          # 再生成: インデックス
+          echo "# 院内ルール 一覧" > docs/index.md
+          echo >> docs/index.md
+          for f in $(ls -1 rules/*.md 2>/dev/null | sort); do
+            base=$(basename "$f")
+            title=$(echo "$base" | sed 's/.md$//')
+            echo "- [${title}](./rules/${base})" >> docs/index.md
+          done
+          echo >> docs/index.md
+          echo "更新履歴はGitHubを参照してください。" >> docs/index.md
+
+      - name: Commit docs changes
+        run: |
+          if [ -n "$(git status --porcelain docs)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs
+            git commit -m "chore: docs sync from rules [pages]"
+            git push
+          else
+            echo "No docs changes"
+          fi
+
+      - name: Notify Relay API
+        if: ${{ vars.RELAY_URL && secrets.RELAY_SECRET }}
+        env:
+          RELAY_URL: ${{ vars.RELAY_URL }}
+          RELAY_SECRET: ${{ secrets.RELAY_SECRET }}
+        run: |
+          payload=$(jq -n --arg repo "${GITHUB_REPOSITORY}" \
+                          --arg event "${GITHUB_EVENT_NAME}" \
+                          --arg pr "${{ github.event.pull_request.number || '' }}" \
+                          --arg commit "${GITHUB_SHA}" \
+                          --arg pages_url "https://$(echo "$GITHUB_REPOSITORY" | awk -F/ '{print tolower($1)}').github.io/$(echo "$GITHUB_REPOSITORY" | awk -F/ '{print $2}')/" \
+                          '{repo:$repo,event:$event,pr:$pr,commit:$commit,pages_url:$pages_url}')
+
+          sig=$(printf "%s" "$payload" | openssl dgst -sha256 -hmac "$RELAY_SECRET" -binary | xxd -p -c 256)
+          curl -sS -X POST "$RELAY_URL/notify" \
+            -H "Content-Type: application/json" \
+            -H "X-Signature: sha256=$sig" \
+            -d "$payload" || true
+

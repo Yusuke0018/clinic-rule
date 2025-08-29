@@ -1,0 +1,46 @@
+name: "院内ルール改定の提案"
+description: "対象ルール・施行日・背景・変更案・影響チェックを入力してください"
+title: "[提案] <対象ルール> - <要約>"
+labels:
+  - proposal
+body:
+  - type: input
+    id: target
+    attributes:
+      label: 対象ルール（ファイル名）
+      description: 例) 01_総則.md （rules/配下のMarkdown）
+      placeholder: 01_総則.md
+    validations:
+      required: true
+  - type: input
+    id: effective_date
+    attributes:
+      label: 施行日（YYYY-MM-DD）
+      placeholder: 2025-09-01
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 提案の背景・目的を記載してください
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 変更案
+      description: 具体的な変更内容を記載してください（箇条書き可）
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 影響チェック（該当するものにチェック）
+      options:
+        - label: 院内周知が必要
+        - label: 研修/教育が必要
+        - label: システム変更が必要
+        - label: 法令/ガイドラインの確認が必要
+        - label: 影響なし
+
