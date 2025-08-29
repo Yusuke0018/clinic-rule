@@ -322,10 +322,17 @@
           BREAD.textContent = "home";
           setActive("home");
           RULES_BLOCK.classList.add("hidden");
-          await renderMarkdown(`${GH_BASE}/docs/index.md`).catch(() => {
-            CONTENT.innerHTML =
-              '<p class="muted">docs/index.md が見つかりません。READMEを表示します。</p>';
-            return renderMarkdown(`${GH_BASE}/README.md`);
+          // docs/home.md → docs/index.md → README の順でフォールバック
+          await renderMarkdown(`${GH_BASE}/docs/home.md`).catch(async () => {
+            const ok = await renderMarkdown(`${GH_BASE}/docs/index.md`).then(
+              () => true,
+              () => false,
+            );
+            if (!ok) {
+              CONTENT.innerHTML =
+                '<p class="muted">home.md/index.md が見つかりません。READMEを表示します。</p>';
+              return renderMarkdown(`${GH_BASE}/README.md`);
+            }
           });
         },
         setup: async () => {
@@ -351,12 +358,14 @@
               '<span class="muted">ルール一覧の取得に失敗しました。</span>';
           });
           if (file) {
-            await renderMarkdown(`${GH_BASE}/docs/rules/${file}`).catch(async () => {
-              await renderMarkdown(`${GH_BASE}/rules/${file}`).catch(() => {
-                CONTENT.innerHTML =
-                  '<p class="muted">該当ルールが見つかりません。</p>';
-              });
-            });
+            await renderMarkdown(`${GH_BASE}/docs/rules/${file}`).catch(
+              async () => {
+                await renderMarkdown(`${GH_BASE}/rules/${file}`).catch(() => {
+                  CONTENT.innerHTML =
+                    '<p class="muted">該当ルールが見つかりません。</p>';
+                });
+              },
+            );
           } else {
             CONTENT.innerHTML =
               '<p class="muted">左の一覧からルールを選択してください。</p>';

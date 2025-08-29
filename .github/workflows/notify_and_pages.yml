@@ -21,22 +21,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build docs (copy rules and index)
+      - name: Build docs (copy rules and home)
         run: |
           mkdir -p docs/rules
           cp -f rules/*.md docs/rules/ 2>/dev/null || true
-          # 再生成: インデックス
-          echo "# 院内ルール 一覧" > docs/index.md
-          echo >> docs/index.md
+          # 再生成: ホーム（SPAで読み取る Markdown）
+          echo "# 院内ルール 一覧" > docs/home.md
+          echo >> docs/home.md
           for f in $(ls -1 rules/*.md 2>/dev/null | sort); do
             base=$(basename "$f")
             title=$(echo "$base" | sed 's/.md$//')
-            echo "- [${title}](./rules/${base})" >> docs/index.md
+            echo "- [${title}](./rules/${base})" >> docs/home.md
           done
-          echo >> docs/index.md
-          echo "更新履歴はGitHubを参照してください。" >> docs/index.md
-          echo >> docs/index.md
-          echo "その他: [申請チートシート](./cheatsheet.md)" >> docs/index.md
+          echo >> docs/home.md
+          echo "更新履歴はGitHubを参照してください。" >> docs/home.md
+          echo >> docs/home.md
+          echo "その他: [申請チートシート](./cheatsheet.md)" >> docs/home.md
+          # 旧index.mdが存在する場合は削除（SPAのindex.htmlを優先するため）
+          rm -f docs/index.md
 
       - name: Commit docs changes
         run: |
