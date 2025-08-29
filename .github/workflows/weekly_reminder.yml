@@ -40,8 +40,9 @@ jobs:
           RELAY_URL: ${{ vars.RELAY_URL }}
           RELAY_SECRET: ${{ secrets.RELAY_SECRET }}
           TEXT: ${{ steps.prs.outputs.text }}
+          MENTION: ${{ vars.REMINDER_MENTION }}
         run: |
-          payload=$(jq -n --arg repo "${GITHUB_REPOSITORY}" --arg event "reminder" --arg text "$TEXT" '{repo:$repo,event:$event,text:$text}')
+          body_text="$TEXT"; if [ -n "$MENTION" ]; then body_text="$body_text\n$MENTION"; fi
+          payload=$(jq -n --arg repo "${GITHUB_REPOSITORY}" --arg event "reminder" --arg text "$body_text" '{repo:$repo,event:$event,text:$text}')
           sig=$(printf "%s" "$payload" | openssl dgst -sha256 -hmac "$RELAY_SECRET" -binary | xxd -p -c 256)
           curl -sS -X POST "$RELAY_URL/notify" -H "Content-Type: application/json" -H "X-Signature: sha256=$sig" -d "$payload" || true
-

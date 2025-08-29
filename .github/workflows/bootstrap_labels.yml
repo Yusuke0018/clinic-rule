@@ -1,0 +1,28 @@
+name: Bootstrap Labels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  ensure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure label 'proposal'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const name = 'proposal';
+            try {
+              await github.issues.getLabel({ owner, repo, name });
+            } catch (e) {
+              if (e.status === 404) {
+                await github.issues.createLabel({ owner, repo, name, color: '0E8A16', description: '院内ルール改定提案' });
+              } else {
+                throw e;
+              }
+            }
+

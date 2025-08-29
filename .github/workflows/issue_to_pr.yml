@@ -148,6 +148,7 @@ jobs:
                 `- 対象: ${path}`,
                 `- 施行日: ${effective}`,
                 `- 差分を確認し、必要なレビュアが承認後マージしてください。`,
+                `Closes #${context.issue.number}`,
               ].join('\n'),
             });
             core.info(`PR #${pr.number} created`);
