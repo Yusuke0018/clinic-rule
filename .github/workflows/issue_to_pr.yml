@@ -51,13 +51,19 @@ jobs:
       - name: Create branch and update rule file
         id: change
         uses: actions/github-script@v7
+        env:
+          TARGET: ${{ steps.extract.outputs.target }}
+          EFFECTIVE: ${{ steps.extract.outputs.effective }}
+          BACKGROUND: ${{ steps.extract.outputs.background }}
+          PROPOSAL: ${{ steps.extract.outputs.proposal }}
+          IMPACT: ${{ steps.extract.outputs.impact }}
         with:
           script: |
-            const target = core.getInput('target', { required: true });
-            const effective = core.getInput('effective', { required: true });
-            const background = core.getInput('background') || '';
-            const proposal = core.getInput('proposal') || '';
-            const impact = core.getInput('impact') || '';
+            const target = process.env.TARGET;
+            const effective = process.env.EFFECTIVE;
+            const background = process.env.BACKGROUND || '';
+            const proposal = process.env.PROPOSAL || '';
+            const impact = process.env.IMPACT || '';
 
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -121,11 +127,15 @@ jobs:
 
       - name: Create Pull Request
         uses: actions/github-script@v7
+        env:
+          BRANCH: ${{ steps.change.outputs.branch }}
+          PATH: ${{ steps.change.outputs.path }}
+          EFFECTIVE: ${{ steps.extract.outputs.effective }}
         with:
           script: |
-            const branch = core.getInput('branch', { required: true });
-            const path = core.getInput('path', { required: true });
-            const effective = core.getInput('effective', { required: true });
+            const branch = process.env.BRANCH;
+            const path = process.env.PATH;
+            const effective = process.env.EFFECTIVE;
 
             const { data: pr } = await github.pulls.create({
               owner: context.repo.owner,
@@ -141,4 +151,3 @@ jobs:
               ].join('\n'),
             });
             core.info(`PR #${pr.number} created`);
-
