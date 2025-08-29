@@ -35,6 +35,8 @@ jobs:
           done
           echo >> docs/index.md
           echo "更新履歴はGitHubを参照してください。" >> docs/index.md
+          echo >> docs/index.md
+          echo "その他: [申請チートシート](./cheatsheet.md)" >> docs/index.md
 
       - name: Commit docs changes
         run: |
@@ -66,4 +68,3 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Signature: sha256=$sig" \
             -d "$payload" || true
-
