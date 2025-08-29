@@ -227,6 +227,7 @@
         <div class="toolbar">
           <span id="breadcrumb" class="muted">home</span>
           <span class="muted">•</span>
+          <button id="new-issue">ルール申請</button>
           <button id="open-source">GitHubで開く</button>
           <button id="copy-link">リンクをコピー</button>
         </div>
@@ -254,6 +255,7 @@
       const RULES_BLOCK = document.getElementById("rules-block");
       const RULES_LIST = document.getElementById("rules-list");
       const RULE_SEARCH = document.getElementById("rule-search");
+      const NEW_ISSUE_BTN = document.getElementById("new-issue");
       const OPEN_BTN = document.getElementById("open-source");
       const COPY_BTN = document.getElementById("copy-link");
       const SITE_URL = document.getElementById("site-url");
@@ -381,6 +383,22 @@
       });
 
       // 外部ボタン
+      NEW_ISSUE_BTN.addEventListener("click", () => {
+        const hash = location.hash.slice(2);
+        let title = "[提案] ";
+        if (hash.startsWith("rules/")) {
+          const file = hash.split("/")[1];
+          try {
+            title = `[提案] ${decodeURIComponent(file)} - `;
+          } catch {}
+        }
+        const url = new URL(`https://github.com/${OWNER}/${REPO}/issues/new`);
+        url.searchParams.set("labels", "proposal");
+        url.searchParams.set("template", "proposal.yml");
+        url.searchParams.set("title", title);
+        window.open(url.toString(), "_blank");
+      });
+
       OPEN_BTN.addEventListener("click", () => {
         const hash = location.hash.slice(2);
         if (hash.startsWith("rules/")) {
