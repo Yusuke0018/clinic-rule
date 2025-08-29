@@ -1,0 +1,47 @@
+name: Weekly Pending PR Reminder
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gather pending PRs
+        id: prs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const query = `
+              query($owner:String!, $repo:String!) {
+                repository(owner:$owner, name:$repo) {
+                  pullRequests(states:OPEN, first:50, orderBy:{field:UPDATED_AT, direction:DESC}) {
+                    nodes { number title url isDraft reviewDecision }
+                  }
+                }
+              }
+            `;
+            const { repository } = await github.graphql(query, { owner, repo });
+            const nodes = repository.pullRequests.nodes.filter(pr => !pr.isDraft && pr.reviewDecision !== 'APPROVED');
+            const list = nodes.map(pr => `- PR #${pr.number}: ${pr.title}\n  ${pr.url}`).join('\n');
+            core.setOutput('text', list || '（該当なし）');
+
+      - name: Notify Relay API
+        if: ${{ vars.RELAY_URL && secrets.RELAY_SECRET }}
+        env:
+          RELAY_URL: ${{ vars.RELAY_URL }}
+          RELAY_SECRET: ${{ secrets.RELAY_SECRET }}
+          TEXT: ${{ steps.prs.outputs.text }}
+        run: |
+          payload=$(jq -n --arg repo "${GITHUB_REPOSITORY}" --arg event "reminder" --arg text "$TEXT" '{repo:$repo,event:$event,text:$text}')
+          sig=$(printf "%s" "$payload" | openssl dgst -sha256 -hmac "$RELAY_SECRET" -binary | xxd -p -c 256)
+          curl -sS -X POST "$RELAY_URL/notify" -H "Content-Type: application/json" -H "X-Signature: sha256=$sig" -d "$payload" || true
+
