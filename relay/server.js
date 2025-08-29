@@ -125,7 +125,7 @@ app.post('/notify', async (req, res) => {
   const expected = 'sha256=' + crypto.createHmac('sha256', String(s.relay_secret || '')).update(req.rawBody || '').digest('hex');
   if (!s.relay_secret || sig !== expected) return res.status(401).send('unauthorized');
 
-  const { repo, event, pr, commit, pages_url, room_id: roomFromPayload } = req.body || {};
+  const { repo, event, pr, commit, pages_url, text, room_id: roomFromPayload } = req.body || {};
   const room_id = s.room_id || String(roomFromPayload || '');
   const chatwork_token = s.chatwork_token;
   if (!chatwork_token || !room_id) return res.status(400).send('未設定: トークン/ルームID');
@@ -135,7 +135,10 @@ app.post('/notify', async (req, res) => {
   const linkSite = pages_url || '';
 
   const lines = [];
-  if (event === 'pull_request') {
+  if (event === 'reminder') {
+    lines.push('【未レビューPR リマインダー】');
+    lines.push(text || '（該当なし）');
+  } else if (event === 'pull_request') {
     lines.push('【ルール改定】PRが承認/マージされました');
     if (linkPR) lines.push(linkPR);
   } else {
@@ -174,4 +177,3 @@ const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
   console.log('relay listening on :' + port);
 });
-
