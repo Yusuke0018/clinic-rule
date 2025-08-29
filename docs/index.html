@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clinic Rule</title>
+    <meta name="description" content="Clinic Rule ドキュメントと院内規則" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <style>
+      :root {
+        --bg: #0f172a; /* slate-900 */
+        --panel: #111827; /* gray-900 */
+        --text: #e5e7eb; /* gray-200 */
+        --muted: #94a3b8; /* slate-400 */
+        --accent: #22d3ee; /* cyan-400 */
+        --accent-2: #a78bfa; /* violet-400 */
+        --link: #60a5fa; /* blue-400 */
+        --border: #1f2937; /* gray-800 */
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Noto Sans JP,
+          Helvetica,
+          Arial,
+          Apple Color Emoji,
+          Segoe UI Emoji,
+          Segoe UI Symbol;
+        color: var(--text);
+        background: radial-gradient(
+            1200px 800px at 10% -10%,
+            rgba(167, 139, 250, 0.15),
+            transparent 60%
+          ),
+          radial-gradient(
+            1000px 700px at 110% 0%,
+            rgba(34, 211, 238, 0.12),
+            transparent 60%
+          ),
+          linear-gradient(180deg, #0b1022 0%, #0f172a 100%);
+      }
+      a {
+        color: var(--link);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        min-height: 100vh;
+      }
+      .sidebar {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        height: 100vh;
+        background: linear-gradient(180deg, #0f172a80, #0f172a00), var(--panel);
+        border-right: 1px solid var(--border);
+        padding: 20px 16px;
+        box-sizing: border-box;
+        overflow-y: auto;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .logo {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: conic-gradient(from 210deg, var(--accent), var(--accent-2));
+        box-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+      }
+      .brand h1 {
+        font-size: 16px;
+        margin: 0;
+        letter-spacing: 0.2px;
+      }
+      .nav {
+        display: grid;
+        gap: 6px;
+        margin: 8px 0 20px;
+      }
+      .nav a {
+        display: block;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        color: var(--text);
+      }
+      .nav a.active {
+        background: #0b1221;
+        border-color: #13223d;
+      }
+      .section-title {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 18px 6px 8px;
+      }
+      .list {
+        display: grid;
+        gap: 4px;
+      }
+      .list a {
+        color: var(--muted);
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+      .list a:hover {
+        background: #0b1221;
+        color: var(--text);
+      }
+      .main {
+        padding: 24px 8vw;
+      }
+      .content {
+        max-width: 960px;
+      }
+      .content h1,
+      .content h2,
+      .content h3 {
+        scroll-margin-top: 80px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .toolbar button {
+        background: #0b1221;
+        color: var(--text);
+        border: 1px solid #13223d;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .toolbar button:hover {
+        filter: brightness(1.1);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .footer {
+        margin-top: 48px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .hidden {
+        display: none;
+      }
+      pre {
+        background: #0b1221;
+        border: 1px solid #13223d;
+        padding: 12px;
+        border-radius: 10px;
+        overflow: auto;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          monospace;
+      }
+      .search {
+        width: 100%;
+        box-sizing: border-box;
+        margin: 10px 0 6px;
+      }
+      .search input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #13223d;
+        background: #0b1221;
+        color: var(--text);
+      }
+      @media (max-width: 900px) {
+        .container {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          position: static;
+          height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo"></div>
+          <h1>Clinic Rule</h1>
+        </div>
+        <div class="nav" id="nav">
+          <a href="#/home" data-route="home" class="active">ホーム</a>
+          <a href="#/setup" data-route="setup">セットアップ</a>
+          <a href="#/cheatsheet" data-route="cheatsheet">チートシート</a>
+          <a href="#/rules" data-route="rules">規則一覧</a>
+        </div>
+        <div id="rules-block" class="hidden">
+          <div class="section-title">規則</div>
+          <div class="search">
+            <input
+              id="rule-search"
+              type="search"
+              placeholder="検索 (ファイル名/本文)"
+            />
+          </div>
+          <div id="rules-list" class="list"></div>
+        </div>
+      </aside>
+      <main class="main">
+        <div class="toolbar">
+          <span id="breadcrumb" class="muted">home</span>
+          <span class="muted">•</span>
+          <button id="open-source">GitHubで開く</button>
+          <button id="copy-link">リンクをコピー</button>
+        </div>
+        <article id="content" class="content"></article>
+        <div class="footer">
+          公開先:
+          <a id="site-url" href="#" target="_blank" rel="noopener"
+            >GitHub Pages</a
+          >
+        </div>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+      // 設定
+      const OWNER = "Yusuke0018";
+      const REPO = "clinic-rule";
+      const BRANCH = "main";
+      const GH_BASE = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}`;
+      const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents`;
+      const CONTENT = document.getElementById("content");
+      const BREAD = document.getElementById("breadcrumb");
+      const NAV = document.getElementById("nav");
+      const RULES_BLOCK = document.getElementById("rules-block");
+      const RULES_LIST = document.getElementById("rules-list");
+      const RULE_SEARCH = document.getElementById("rule-search");
+      const OPEN_BTN = document.getElementById("open-source");
+      const COPY_BTN = document.getElementById("copy-link");
+      const SITE_URL = document.getElementById("site-url");
+
+      SITE_URL.href = `https://${OWNER.toLowerCase()}.github.io/${REPO}/`;
+      SITE_URL.textContent = SITE_URL.href;
+
+      // ユーティリティ
+      const escapeHtml = (s) =>
+        s
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+
+      const setActive = (route) => {
+        document.querySelectorAll("#nav a").forEach((a) => {
+          a.classList.toggle("active", a.dataset.route === route);
+        });
+      };
+
+      const renderMarkdown = async (url) => {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+        const text = await res.text();
+        CONTENT.innerHTML = marked.parse(text);
+      };
+
+      const listRules = async () => {
+        // docs/rules (Actionsで同期) → rules の順に探索
+        let res = await fetch(`${API_BASE}/docs/rules`);
+        if (!res.ok) {
+          res = await fetch(`${API_BASE}/rules`);
+        }
+        if (!res.ok) throw new Error("rules list fetch failed");
+        /** @type {{name:string,path:string,download_url:string}[]} */
+        const items = (await res.json()).filter((x) => x.name.endsWith(".md"));
+        items.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+        RULES_LIST.innerHTML = items
+          .map((x) => {
+            const name = x.name.replace(/^[0-9]+_?/, "").replace(/\.md$/, "");
+            return `<a href="#/rules/${encodeURIComponent(x.name)}" data-file="${encodeURIComponent(x.name)}">${escapeHtml(name)}</a>`;
+          })
+          .join("");
+        return items;
+      };
+
+      const filterRules = () => {
+        const q = RULE_SEARCH.value.trim().toLowerCase();
+        if (!q) {
+          Array.from(RULES_LIST.children).forEach((el) =>
+            el.classList.remove("hidden"),
+          );
+          return;
+        }
+        Array.from(RULES_LIST.children).forEach((el) => {
+          const txt = el.textContent.toLowerCase();
+          el.classList.toggle("hidden", !txt.includes(q));
+        });
+      };
+
+      RULE_SEARCH?.addEventListener("input", filterRules);
+
+      // ルーター
+      const routes = {
+        home: async () => {
+          BREAD.textContent = "home";
+          setActive("home");
+          RULES_BLOCK.classList.add("hidden");
+          await renderMarkdown(`${GH_BASE}/docs/index.md`).catch(() => {
+            CONTENT.innerHTML =
+              '<p class="muted">docs/index.md が見つかりません。READMEを表示します。</p>';
+            return renderMarkdown(`${GH_BASE}/README.md`);
+          });
+        },
+        setup: async () => {
+          BREAD.textContent = "setup";
+          setActive("setup");
+          RULES_BLOCK.classList.add("hidden");
+          await renderMarkdown(`${GH_BASE}/docs/setup.md`);
+        },
+        cheatsheet: async () => {
+          BREAD.textContent = "cheatsheet";
+          setActive("cheatsheet");
+          RULES_BLOCK.classList.add("hidden");
+          await renderMarkdown(`${GH_BASE}/docs/cheatsheet.md`);
+        },
+        rules: async (file) => {
+          BREAD.textContent = file
+            ? `rules / ${decodeURIComponent(file)}`
+            : "rules";
+          setActive("rules");
+          RULES_BLOCK.classList.remove("hidden");
+          await listRules().catch(() => {
+            RULES_LIST.innerHTML =
+              '<span class="muted">ルール一覧の取得に失敗しました。</span>';
+          });
+          if (file) {
+            await renderMarkdown(`${GH_BASE}/docs/rules/${file}`).catch(async () => {
+              await renderMarkdown(`${GH_BASE}/rules/${file}`).catch(() => {
+                CONTENT.innerHTML =
+                  '<p class="muted">該当ルールが見つかりません。</p>';
+              });
+            });
+          } else {
+            CONTENT.innerHTML =
+              '<p class="muted">左の一覧からルールを選択してください。</p>';
+          }
+        },
+      };
+
+      // ナビクリック
+      NAV.addEventListener("click", (e) => {
+        if (e.target.tagName === "A") {
+          // SPA操作なので何もしない
+        }
+      });
+
+      // 外部ボタン
+      OPEN_BTN.addEventListener("click", () => {
+        const hash = location.hash.slice(2);
+        if (hash.startsWith("rules/")) {
+          const file = hash.split("/")[1];
+          window.open(
+            `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/rules/${file}`,
+            "_blank",
+          );
+        } else if (hash === "setup") {
+          window.open(
+            `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/docs/setup.md`,
+            "_blank",
+          );
+        } else if (hash === "cheatsheet") {
+          window.open(
+            `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/docs/cheatsheet.md`,
+            "_blank",
+          );
+        } else {
+          window.open(`https://github.com/${OWNER}/${REPO}`, "_blank");
+        }
+      });
+      COPY_BTN.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(location.href);
+        COPY_BTN.textContent = "コピーしました";
+        setTimeout(() => (COPY_BTN.textContent = "リンクをコピー"), 1200);
+      });
+
+      // ハッシュルーティング
+      const handleHash = async () => {
+        const hash = location.hash.replace(/^#\/?/, "");
+        const [route, fileEnc] = hash.split("/", 2);
+        const fn = routes[route || "home"] || routes.home;
+        await fn(fileEnc);
+      };
+      window.addEventListener("hashchange", handleHash);
+      handleHash();
+    </script>
+  </body>
+</html>

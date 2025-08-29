@@ -5,4 +5,3 @@
 - [総則](./rules/01_総則.md)
 
 更新履歴はGitHubのPull Requestとコミット履歴を参照してください。
-
