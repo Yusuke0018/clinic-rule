@@ -50,8 +50,8 @@ jobs:
             echo "No docs changes"
           fi
 
-      - name: Notify Relay API
-        if: ${{ vars.RELAY_URL && secrets.RELAY_SECRET }}
+      - name: Notify Relay API (only on merged PR)
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true && vars.RELAY_URL && secrets.RELAY_SECRET }}
         env:
           RELAY_URL: ${{ vars.RELAY_URL }}
           RELAY_SECRET: ${{ secrets.RELAY_SECRET }}
