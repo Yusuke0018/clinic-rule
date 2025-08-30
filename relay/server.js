@@ -52,6 +52,17 @@ function readSecrets() {
   }
 }
 
+// ENV優先で設定を取得（RenderのEnvironment Variablesを上書き使用）
+function getSecrets() {
+  const s = readSecrets();
+  const env = process.env || {};
+  if (env.GITHUB_TOKEN) s.github_token = env.GITHUB_TOKEN;
+  if (env.GITHUB_REPO) s.github_repo = env.GITHUB_REPO;
+  if (env.RELAY_SECRET) s.relay_secret = env.RELAY_SECRET;
+  if (env.CHATWORK_TOKEN) s.chatwork_token = env.CHATWORK_TOKEN;
+  if (env.ROOM_ID) s.room_id = env.ROOM_ID;
+  return s;
+}
 function writeSecrets(obj) {
   const json = JSON.stringify(obj, null, 2);
   fs.writeFileSync(secretPath, json, { encoding: "utf8", mode: 0o600 });
@@ -135,7 +146,7 @@ app.get("/admin", adminAuth, (req, res) => {
     relay_secret = "",
     github_token = "",
     github_repo = "",
-  } = readSecrets();
+  } = getSecrets();
   const mask = (v) => (v ? v.slice(0, 3) + "***" + v.slice(-3) : "");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.end(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>院内ルール リレー設定</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:sans-serif;max-width:720px;margin:24px auto;padding:0 12px}label{display:block;margin:.5rem 0 .25rem}input[type=text],input[type=password]{width:100%;padding:.5rem}button{padding:.5rem 1rem;margin-right:.5rem}</style></head><body>
@@ -192,7 +203,7 @@ app.post("/admin/save", adminAuth, (req, res) => {
 
 app.post("/admin/test", adminAuth, async (req, res) => {
   if (!ipAllowed(req)) return res.status(403).send("forbidden");
-  const { chatwork_token, room_id } = readSecrets();
+  const { chatwork_token, room_id } = getSecrets();
   if (!chatwork_token || !room_id)
     return res.status(400).send("未設定: トークン/ルームID");
   try {
@@ -215,7 +226,7 @@ app.post("/admin/test", adminAuth, async (req, res) => {
 
 app.post("/notify", async (req, res) => {
   if (!ipAllowed(req)) return res.status(403).send("forbidden");
-  const s = readSecrets();
+  const s = getSecrets();
   const sig = req.header("x-signature") || req.header("X-Signature") || "";
   const expected =
     "sha256=" +
@@ -293,7 +304,7 @@ async function sendChatwork({ chatwork_token, room_id, body }) {
 // Submit proposal (no GitHub account needed): creates Issue in configured repo
 app.post("/proposal", async (req, res) => {
   try {
-    const s = readSecrets();
+    const s = getSecrets();
     const { github_token, github_repo } = s;
     if (!github_token || !github_repo)
       return res.status(400).json({ error: "not_configured" });
@@ -347,7 +358,7 @@ app.post("/proposal", async (req, res) => {
 // Withdraw proposal: POST {number, token}
 app.post("/proposal/withdraw", async (req, res) => {
   try {
-    const s = readSecrets();
+    const s = getSecrets();
     const { github_token, github_repo } = s;
     if (!github_token || !github_repo)
       return res.status(400).json({ error: "not_configured" });
@@ -405,7 +416,7 @@ app.post("/proposal/withdraw", async (req, res) => {
 // POST {issue:number, author:string, body:string}
 app.post("/comment", async (req, res) => {
   try {
-    const s = readSecrets();
+    const s = getSecrets();
     const { github_token, github_repo } = s;
     if (!github_token || !github_repo)
       return res.status(400).json({ error: "not_configured" });
@@ -453,7 +464,7 @@ app.post("/comment", async (req, res) => {
 // POST {id:number, token:string, author?:string, body:string}
 app.post("/comment/edit", async (req, res) => {
   try {
-    const s = readSecrets();
+    const s = getSecrets();
     const { github_token, github_repo } = s;
     if (!github_token || !github_repo)
       return res.status(400).json({ error: "not_configured" });
@@ -498,7 +509,7 @@ app.post("/comment/edit", async (req, res) => {
 // POST {id:number, token:string}
 app.post("/comment/delete", async (req, res) => {
   try {
-    const s = readSecrets();
+    const s = getSecrets();
     const { github_token, github_repo } = s;
     if (!github_token || !github_repo)
       return res.status(400).json({ error: "not_configured" });
@@ -535,7 +546,7 @@ app.post("/comment/delete", async (req, res) => {
 // Edit proposal: POST {number, token, title, reason, author}
 app.post("/proposal/edit", async (req, res) => {
   try {
-    const s = readSecrets();
+    const s = getSecrets();
     const { github_token, github_repo } = s;
     if (!github_token || !github_repo)
       return res.status(400).json({ error: "not_configured" });
