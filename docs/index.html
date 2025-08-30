@@ -402,13 +402,15 @@
 
       const listRules = async () => {
         // docs/rules (Actionsで同期) → rules の順に探索
-        let res = await fetch(`${API_BASE}/docs/rules`);
+        let res = await ghGet(`${API_BASE}/docs/rules`);
         if (!res.ok) {
-          res = await fetch(`${API_BASE}/rules`);
+          res = await ghGet(`${API_BASE}/rules`);
         }
         if (!res.ok) throw new Error("rules list fetch failed");
-        /** @type {{name:string,path:string,download_url:string}[]} */
-        const items = (await res.json()).filter((x) => x.name.endsWith(".md"));
+        /** @type {{name:string,path:string,download_url:string,type:string}[]} */
+        const items = (await res.json()).filter(
+          (x) => x && x.type === "file" && x.name.toLowerCase().endsWith(".md"),
+        );
         items.sort((a, b) => a.name.localeCompare(b.name, "ja"));
         RULES_LIST.innerHTML = items
           .map((x) => {
