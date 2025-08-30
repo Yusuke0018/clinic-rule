@@ -182,6 +182,23 @@
         padding: 14px;
         background: #0b1221;
       }
+      .dimmed {
+        opacity: 0.55;
+      }
+      .undo-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: -4px 0 6px;
+        padding: 8px 10px;
+        border: 1px dashed #2a3a5e;
+        border-radius: 8px;
+        background: #0c1630;
+        color: var(--muted);
+      }
+      .undo-bar .count {
+        color: #e5e7eb;
+      }
       .chip {
         display: inline-flex;
         align-items: center;
@@ -679,6 +696,7 @@
               <hr style="border-color:#13223d" />
               <h2 style="font-size:16px">意見を書く</h2>
               <div id="op-form-wrap"></div>
+              <div style="margin-top:10px"><button class="button" id="hide-here">この提案を非表示にする</button></div>
             `;
             const list = document.getElementById("opinions");
             async function refreshComments(delayMs = 0) {
@@ -760,6 +778,62 @@
               wrap.innerHTML =
                 '<p class="muted">管理者がrelayを設定すると、この画面から意見投稿できます。</p>';
             }
+            // 詳細画面の非表示ボタン
+            document
+              .getElementById("hide-here")
+              ?.addEventListener("click", async () => {
+                if (!RELAY_URL) {
+                  alert("管理者設定が必要です（relay_url）");
+                  return;
+                }
+                const host = document.getElementById("opinions").parentElement;
+                if (!host) return;
+                const bar = document.createElement("div");
+                bar.className = "undo-bar";
+                bar.innerHTML =
+                  '非表示にしました • <span class="count">30</span> 秒以内は元に戻せます <button class="button undo" style="padding:4px 10px">元に戻す</button>';
+                host.prepend(bar);
+                let canceled = false;
+                let ok = false;
+                let sec = 30;
+                const cnt = bar.querySelector(".count");
+                const tick = setInterval(() => {
+                  sec--;
+                  if (sec >= 0 && cnt) cnt.textContent = String(sec);
+                }, 1000);
+                try {
+                  const r = await fetch(`${RELAY_URL}/hide`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ issue: n }),
+                  });
+                  ok = r.ok;
+                } catch (_) {
+                  ok = false;
+                }
+                bar
+                  .querySelector(".undo")
+                  ?.addEventListener("click", async () => {
+                    canceled = true;
+                    clearInterval(tick);
+                    try {
+                      await fetch(`${RELAY_URL}/unhide`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ issue: n }),
+                      });
+                    } catch (_) {}
+                    bar.remove();
+                  });
+                setTimeout(() => {
+                  clearInterval(tick);
+                  if (!canceled && ok) {
+                    BREAD.textContent = "pending";
+                    location.hash = "#/pending";
+                  }
+                  bar.remove();
+                }, 30000);
+              });
             return;
           }
 
@@ -798,7 +872,7 @@
               const likes =
                 (likesMap && (likesMap[String(x.number)] || 0)) || 0;
               return `
-              <section class="card" style="display:grid;gap:10px;">
+              <section class="card" style="display:grid;gap:10px;" data-issue="${x.number}">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
                   <h3 style="margin:0;font-size:18px;">${escapeHtml(title)}</h3>
                   <div style="display:flex;gap:8px;align-items:center;">
@@ -808,6 +882,7 @@
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                   <span class="chip">💬 ${commentsCount}</span>
+                  <button class="button hide-btn" data-issue="${x.number}">非表示にする</button>
                 </div>
                 <div class="excerpt">${escapeHtml(mdExcerpt(body, 240))}</div>
                 <div style="display:flex;align-items:center;gap:8px;">
@@ -817,6 +892,68 @@
               </section>`;
             })
             .join("");
+          // 非表示ボタン
+          wrap.querySelectorAll(".hide-btn").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const n = btn.getAttribute("data-issue");
+              if (!RELAY_URL) {
+                alert("管理者設定が必要です（relay_url）");
+                return;
+              }
+              const card = btn.closest("[data-issue]");
+              if (!card) return;
+              // 楽観UI
+              card.classList.add("dimmed");
+              const bar = document.createElement("div");
+              bar.className = "undo-bar";
+              bar.innerHTML =
+                '非表示にしました • <span class="count">30</span> 秒以内は元に戻せます <button class="button undo" style="padding:4px 10px">元に戻す</button>';
+              card.prepend(bar);
+              let canceled = false;
+              let ok = false;
+              let sec = 30;
+              const cnt = bar.querySelector(".count");
+              const tick = setInterval(() => {
+                sec--;
+                if (sec >= 0 && cnt) cnt.textContent = String(sec);
+              }, 1000);
+              try {
+                const r = await fetch(`${RELAY_URL}/hide`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ issue: n }),
+                });
+                ok = r.ok;
+              } catch (_) {
+                ok = false;
+              }
+              bar
+                .querySelector(".undo")
+                ?.addEventListener("click", async () => {
+                  canceled = true;
+                  clearInterval(tick);
+                  try {
+                    await fetch(`${RELAY_URL}/unhide`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ issue: n }),
+                    });
+                  } catch (_) {}
+                  card.classList.remove("dimmed");
+                  bar.remove();
+                });
+              setTimeout(() => {
+                clearInterval(tick);
+                if (!canceled && ok) {
+                  card.remove();
+                } else if (!ok) {
+                  card.classList.remove("dimmed");
+                }
+                bar.remove();
+              }, 30000);
+            });
+          });
+
           wrap.querySelectorAll(".like-btn").forEach((btn) => {
             const id = btn.getAttribute("data-like");
             const key = `liked-${id}`;
