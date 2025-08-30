@@ -898,23 +898,32 @@
             const span = btn.querySelector("span");
             const liked = localStorage.getItem(key) === "1";
             if (liked) btn.classList.add("liked");
+            const parseCount = () => {
+              if (!span) return 0;
+              const m = (span.textContent || "").match(/[0-9]+/);
+              return m ? parseInt(m[0], 10) || 0 : 0;
+            };
+            const setCount = (n) => {
+              if (span) span.textContent = `(${Math.max(0, n | 0)})`;
+            };
             btn.addEventListener("click", async () => {
+              // 楽観的更新（まずはUIを即時反映）
+              const wasLiked = localStorage.getItem(key) === "1";
+              const current = parseCount();
+              if (wasLiked) {
+                localStorage.removeItem(key);
+                btn.classList.remove("liked");
+                setCount(current - 1);
+              } else {
+                localStorage.setItem(key, "1");
+                btn.classList.add("liked");
+                setCount(current + 1);
+              }
+              // サーバー反映（成功時は正値で上書き）
               try {
                 const r = await postLike(id);
-                if (r && typeof r.count === "number") {
-                  if (span) span.textContent = `(${r.count})`;
-                  const nowLiked = localStorage.getItem(key) === "1";
-                  if (nowLiked) {
-                    localStorage.removeItem(key);
-                    btn.classList.remove("liked");
-                  } else {
-                    localStorage.setItem(key, "1");
-                    btn.classList.add("liked");
-                  }
-                }
-              } catch (_) {
-                // noop
-              }
+                if (r && typeof r.count === "number") setCount(r.count);
+              } catch (_) {}
             });
           });
         },
