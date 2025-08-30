@@ -187,7 +187,15 @@ app.post("/admin/test", adminAuth, async (req, res) => {
     res.status(200).send("OK");
   } catch (e) {
     console.error("test error", e.status || "", e.message);
-    res.status(500).send("NG");
+    // エラー詳細を返して原因特定を容易にする
+    res
+      .status(500)
+      .send(
+        "NG: Chatwork APIへの送信に失敗しました。トークン/ルームID/ネットワークを確認してください。" +
+          (e && e.message
+            ? `\nreason: ${String(e.message).slice(0, 300)}`
+            : ""),
+      );
   }
 });
 
@@ -256,7 +264,9 @@ async function sendChatwork({ chatwork_token, room_id, body }) {
     method: "POST",
     headers: {
       "X-ChatWorkToken": chatwork_token,
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+      "User-Agent":
+        "clinic-rule-relay/1.0 (+https://github.com/Yusuke0018/clinic-rule)",
     },
     body: form.toString(),
   });
