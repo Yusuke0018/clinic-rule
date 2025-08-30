@@ -656,11 +656,13 @@ app.get("/proposals", async (req, res) => {
       throw new Error(`gh list issues ${r.status} ${t}`);
     }
     const all = (await r.json()).filter((x) => !x.pull_request);
+    const hidden = readHidden();
     const items = all.filter(
       (x) =>
-        (Array.isArray(x.labels) &&
+        !hidden[String(x.number)] &&
+        ((Array.isArray(x.labels) &&
           x.labels.some((l) => l && l.name === "proposal")) ||
-        (x.title || "").startsWith("[提案]"),
+          (x.title || "").startsWith("[提案]")),
     );
     const out = items.map((x) => ({
       number: x.number,
