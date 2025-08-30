@@ -42,6 +42,7 @@ const secretPath = path.join(dataDir, "secrets.json");
 const likesPath = path.join(dataDir, "likes.json");
 const proposalsPath = path.join(dataDir, "proposals.json");
 const commentsPath = path.join(dataDir, "comments.json");
+const hiddenPath = path.join(dataDir, "hidden.json");
 
 function readSecrets() {
   try {
@@ -109,6 +110,20 @@ function writeCommentsMap(obj) {
   });
 }
 
+// hidden map for proposals list filtering
+function readHidden() {
+  try {
+    return JSON.parse(fs.readFileSync(hiddenPath, "utf8")) || {};
+  } catch (_e) {
+    return {};
+  }
+}
+function writeHidden(obj) {
+  fs.writeFileSync(hiddenPath, JSON.stringify(obj, null, 2), {
+    encoding: "utf8",
+  });
+}
+
 function genSecret(bytes = 32) {
   return crypto.randomBytes(bytes).toString("hex");
 }
@@ -124,6 +139,16 @@ function ipAllowed(req) {
     .split(",")[0]
     .trim();
   return allow.includes(ip);
+}
+
+// Feature flags / helpers
+function persistLikesEnabled() {
+  const { github_token, github_repo } = getSecrets();
+  const flag = String(process.env.PERSIST_LIKES || "").toLowerCase();
+  if (flag === "0" || flag === "false") return false;
+  if (flag === "1" || flag === "true") return !!(github_token && github_repo);
+  // default: disabled unless explicitly enabled
+  return false;
 }
 
 // Basic auth for admin
@@ -501,6 +526,36 @@ app.post("/comment/edit", async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error("comment edit error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Hide/unhide proposals from relay (no auth; use upstream admin if needed)
+app.post("/hide", async (req, res) => {
+  try {
+    const { issue } = req.body || {};
+    const n = String(issue || "").trim();
+    if (!n) return res.status(400).json({ error: "invalid_params" });
+    const map = readHidden();
+    map[n] = 1;
+    writeHidden(map);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("hide error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+app.post("/unhide", async (req, res) => {
+  try {
+    const { issue } = req.body || {};
+    const n = String(issue || "").trim();
+    if (!n) return res.status(400).json({ error: "invalid_params" });
+    const map = readHidden();
+    if (map[n]) delete map[n];
+    writeHidden(map);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("unhide error", e.message);
     return res.status(500).json({ error: "server_error" });
   }
 });
