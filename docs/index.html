@@ -279,12 +279,65 @@
         CONTENT.innerHTML = marked.parse(text);
       };
 
+      // 追加設定: relay 経由で投稿/いいね（GitHubアカウント不要）
+      let RELAY_URL = null;
+      const loadConfig = async () => {
+        try {
+          const res = await fetch(`${GH_BASE}/docs/config.json`, {
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const cfg = await res.json();
+            RELAY_URL =
+              cfg && cfg.relay_url
+                ? String(cfg.relay_url).replace(/\/$/, "")
+                : null;
+          }
+        } catch (_) {}
+      };
+      const getUID = () => {
+        let uid = localStorage.getItem("uid");
+        if (!uid) {
+          uid = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+          localStorage.setItem("uid", uid);
+        }
+        return uid;
+      };
+
       const listProposals = async () => {
         const url = `${API_ISSUES}?labels=proposal&state=open&per_page=100&sort=created&direction=desc`;
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error("issues list failed");
         const items = (await res.json()).filter((x) => !x.pull_request);
         return items;
+      };
+
+      const getLikesBulk = async (nums) => {
+        if (!RELAY_URL || !nums || !nums.length) return {};
+        try {
+          const res = await fetch(
+            `${RELAY_URL}/likes?issues=${nums.join(",")}`,
+          );
+          if (!res.ok) return {};
+          return await res.json();
+        } catch (_) {
+          return {};
+        }
+      };
+      const postLike = async (num) => {
+        if (!RELAY_URL) return { ok: false };
+        try {
+          const res = await fetch(`${RELAY_URL}/like`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ issue: num, uid: getUID() }),
+          });
+          return await res.json();
+        } catch (_) {
+          return { ok: false };
+        }
       };
 
       const listRules = async () => {
@@ -328,23 +381,67 @@
           BREAD.textContent = "propose";
           setActive("propose");
           RULES_BLOCK.classList.add("hidden");
-          CONTENT.innerHTML = `
-            <h1>ルール提案</h1>
-            <p class="muted">タイトルに「提案」を書き、本文の「内容や理由」「登録者」を入力します。</p>
-            <p><a id="new-issue-link" class="button" href="#" target="_blank" rel="noopener">+ 申請を開く（GitHub）</a></p>
-          `;
-          const link = document.getElementById("new-issue-link");
-          const url = new URL(`https://github.com/${OWNER}/${REPO}/issues/new`);
-          url.searchParams.set("labels", "proposal");
-          url.searchParams.set("template", "proposal.yml");
-          url.searchParams.set("title", "[提案] ");
-          link.href = url.toString();
+          await loadConfig();
+          if (RELAY_URL) {
+            CONTENT.innerHTML = `
+              <h1>ルール提案</h1>
+              <p class="muted">タイトル（提案）、内容や理由、登録者 の3点を入力してください。</p>
+              <form id="p-form" style="display:grid;gap:10px;max-width:640px;">
+                <label>タイトル（提案）<br><input id="p-title" required placeholder="例) LINE返信のルール" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></label>
+                <label>内容や理由<br><textarea id="p-reason" required rows="6" placeholder="- 既読から10分以内に返信する\n- 来院中は通知を止める など" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></textarea></label>
+                <label>登録者<br><input id="p-author" required placeholder="例) 山田" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></label>
+                <button id="p-submit" type="submit">送信</button>
+                <div id="p-result" class="muted"></div>
+              </form>
+            `;
+            const form = document.getElementById("p-form");
+            const result = document.getElementById("p-result");
+            form.addEventListener("submit", async (e) => {
+              e.preventDefault();
+              const title = document.getElementById("p-title").value.trim();
+              const reason = document.getElementById("p-reason").value.trim();
+              const author = document.getElementById("p-author").value.trim();
+              result.textContent = "送信中…";
+              try {
+                const resp = await fetch(`${RELAY_URL}/proposal`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ title, reason, author }),
+                });
+                const json = await resp.json();
+                if (resp.ok) {
+                  result.innerHTML = `受け付けました。<a href="${json.url}" target="_blank" rel="noopener">審議ページを開く</a>`;
+                  form.reset();
+                } else {
+                  result.textContent =
+                    "送信に失敗しました。時間を置いて再度お試しください。";
+                }
+              } catch (_) {
+                result.textContent =
+                  "送信に失敗しました。ネットワークをご確認ください。";
+              }
+            });
+          } else {
+            CONTENT.innerHTML = `
+              <h1>ルール提案</h1>
+              <p class="muted">管理者が relay のURLを設定すると、この画面から直接送信できます。現状はGitHubで申請してください。</p>
+              <p><a class="button" href="https://github.com/${OWNER}/${REPO}/issues/new?labels=proposal&template=proposal.yml&title=%5B%E6%8F%90%E6%A1%88%5D%20" target="_blank" rel="noopener">+ GitHubで申請</a></p>
+            `;
+          }
         },
         pending: async () => {
           BREAD.textContent = "pending";
           setActive("pending");
           RULES_BLOCK.classList.add("hidden");
           const items = await listProposals().catch(() => []);
+          const nums = items.map((x) => x.number);
+          await loadConfig();
+          const likesMap = await (async () => {
+            try {
+              const r = await fetch(`${location.origin}`);
+            } catch (_) {}
+            return getLikesBulk ? await getLikesBulk(nums) : {};
+          })();
           CONTENT.innerHTML = `
             <h1>審議中のルール</h1>
             <div id="proposal-list"></div>
@@ -361,9 +458,7 @@
               const url = x.html_url;
               const body = (x.body || "").split("\n").slice(0, 6).join("\n");
               const likes =
-                (x.reactions &&
-                  (x.reactions["+1"] || x.reactions["plus_one"])) ||
-                0;
+                (likesMap && (likesMap[String(x.number)] || 0)) || 0;
               return `
               <section style="border:1px solid #13223d;border-radius:10px;padding:12px;margin:12px 0;background:#0b1221;display:grid;gap:8px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -383,11 +478,17 @@
             const key = `liked-${id}`;
             const liked = localStorage.getItem(key) === "1";
             if (liked) btn.setAttribute("disabled", "true");
-            btn.addEventListener("click", () => {
+            btn.addEventListener("click", async () => {
               localStorage.setItem(key, "1");
               btn.setAttribute("disabled", "true");
-              const item = items.find((i) => String(i.number) === String(id));
-              if (item) window.open(item.html_url, "_blank");
+              if (typeof postLike === "function") {
+                try {
+                  const r = await postLike(id);
+                  const span = btn.querySelector("span");
+                  if (r && span && typeof r.count === "number")
+                    span.textContent = `(${r.count})`;
+                } catch (_) {}
+              }
             });
           });
         },

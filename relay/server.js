@@ -3,6 +3,7 @@ const express = require("express");
 const basicAuth = require("express-basic-auth");
 const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
+const cors = require("cors");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
@@ -15,6 +16,14 @@ app.set(
   process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : 1,
 );
 app.use(helmet());
+app.use(
+  cors({
+    origin: (origin, cb) => cb(null, true),
+    credentials: false,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  }),
+);
 
 // keep raw body for HMAC verification
 app.use(
@@ -30,6 +39,7 @@ app.use(limiter);
 
 const dataDir = __dirname;
 const secretPath = path.join(dataDir, "secrets.json");
+const likesPath = path.join(dataDir, "likes.json");
 
 function readSecrets() {
   try {
@@ -46,6 +56,19 @@ function writeSecrets(obj) {
   try {
     fs.chmodSync(secretPath, 0o600);
   } catch (_e) {}
+}
+
+function readLikes() {
+  try {
+    return JSON.parse(fs.readFileSync(likesPath, "utf8")) || {};
+  } catch (_e) {
+    return {};
+  }
+}
+function writeLikes(obj) {
+  fs.writeFileSync(likesPath, JSON.stringify(obj, null, 2), {
+    encoding: "utf8",
+  });
 }
 
 function genSecret(bytes = 32) {
@@ -81,6 +104,8 @@ app.get("/admin", adminAuth, (req, res) => {
     chatwork_token = "",
     room_id = "",
     relay_secret = "",
+    github_token = "",
+    github_repo = "",
   } = readSecrets();
   const mask = (v) => (v ? v.slice(0, 3) + "***" + v.slice(-3) : "");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -94,6 +119,12 @@ app.get("/admin", adminAuth, (req, res) => {
     <input type="text" name="room_id" value="${room_id || ""}" />
     <label>RELAY_SECRET（GitHub Secretsに貼り付け）</label>
     <input type="text" name="relay_secret" value="${relay_secret || ""}" />
+    <hr />
+    <label>GitHub Token（Issue作成用・repo権限）</label>
+    <input type="password" name="github_token" value="" />
+    <small>保存済み: ${mask(github_token) || "未設定"}</small>
+    <label>GitHub Repo（owner/repo）例: Yusuke0018/clinic-rule</label>
+    <input type="text" name="github_repo" value="${github_repo || ""}" />
     <div style="margin-top:8px">
       <button type="submit">保存</button>
       <button formaction="/admin/gen-secret" formmethod="post">RELAY_SECRET自動生成</button>
@@ -122,6 +153,9 @@ app.post("/admin/save", adminAuth, (req, res) => {
   if (req.body.room_id !== undefined)
     s.room_id = String(req.body.room_id || "");
   if (req.body.relay_secret) s.relay_secret = req.body.relay_secret;
+  if (req.body.github_token) s.github_token = req.body.github_token;
+  if (req.body.github_repo !== undefined)
+    s.github_repo = String(req.body.github_repo || "");
   if (!s.relay_secret) s.relay_secret = genSecret(32);
   writeSecrets(s);
   res.redirect("/admin");
@@ -216,6 +250,91 @@ async function sendChatwork({ chatwork_token, room_id, body }) {
     throw new Error(`chatwork post failed: ${resp.status} ${t.slice(0, 200)}`);
   }
 }
+
+// Submit proposal (no GitHub account needed): creates Issue in configured repo
+app.post("/proposal", async (req, res) => {
+  try {
+    const s = readSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const { title, reason, author } = req.body || {};
+    if (!title || !reason || !author)
+      return res.status(400).json({ error: "invalid_params" });
+    if (String(title).length > 200)
+      return res.status(400).json({ error: "title_too_long" });
+    const [owner, repo] = String(github_repo).split("/");
+    const body = [
+      `### 内容や理由`,
+      String(reason),
+      ``,
+      `### 登録者`,
+      String(author),
+    ].join("\n");
+    const resp = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${github_token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "User-Agent": "clinic-rule-relay",
+        },
+        body: JSON.stringify({
+          title: `[提案] ${title}`.slice(0, 250),
+          body,
+          labels: ["proposal"],
+        }),
+      },
+    );
+    const json = await resp.json();
+    if (!resp.ok)
+      return res.status(resp.status).json({ error: "gh_error", details: json });
+    return res.status(200).json({ number: json.number, url: json.html_url });
+  } catch (e) {
+    console.error("proposal error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Likes: GET /likes?issues=1,2,3 returns {"1":10,...}
+app.get("/likes", (req, res) => {
+  const q = String(req.query.issues || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const all = readLikes();
+  const out = {};
+  for (const id of q) out[id] = (all[id] && all[id].count) || 0;
+  res.json(out);
+});
+
+// Like one: POST {issue:number, uid:string}
+app.post("/like", (req, res) => {
+  try {
+    const { issue, uid } = req.body || {};
+    const id = String(issue || "").trim();
+    const u = String(uid || "").trim();
+    if (!id || !u) return res.status(400).json({ error: "invalid_params" });
+    const all = readLikes();
+    if (!all[id]) all[id] = { count: 0, uids: {} };
+    const bucket = all[id];
+    const key = crypto
+      .createHash("sha256")
+      .update("salt::" + u)
+      .digest("hex");
+    if (bucket.uids[key])
+      return res.json({ ok: true, dup: true, count: bucket.count });
+    bucket.uids[key] = 1;
+    bucket.count += 1;
+    writeLikes(all);
+    return res.json({ ok: true, count: bucket.count });
+  } catch (e) {
+    console.error("like error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
 
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
