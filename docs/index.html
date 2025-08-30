@@ -419,13 +419,29 @@
       };
 
       const listRules = async () => {
-        // docs/rules (Actionsで同期) → rules の順に探索
-        let res = await ghGet(`${API_BASE}/docs/rules`);
-        if (!res.ok) {
-          res = await ghGet(`${API_BASE}/rules`);
+        await loadConfig();
+        if (RELAY_URL) {
+          try {
+            const r = await fetch(`${RELAY_URL}/rules`, { cache: "no-store" });
+            if (r.ok) {
+              const arr = await r.json();
+              arr.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+              RULES_LIST.innerHTML = arr
+                .map((x) => {
+                  const name = x.name
+                    .replace(/^[0-9]+_?/, "")
+                    .replace(/\.md$/, "");
+                  return `<a href="#/rules/${encodeURIComponent(x.name)}" data-file="${encodeURIComponent(x.name)}">${escapeHtml(name)}</a>`;
+                })
+                .join("");
+              return arr;
+            }
+          } catch (_) {}
         }
+        // フォールバック: GitHub APIから直接
+        let res = await ghGet(`${API_BASE}/docs/rules`);
+        if (!res.ok) res = await ghGet(`${API_BASE}/rules`);
         if (!res.ok) return [];
-        /** @type {{name:string,path:string,download_url:string,type:string}[]} */
         const items = (await res.json()).filter(
           (x) => x && x.type === "file" && x.name.toLowerCase().endsWith(".md"),
         );
