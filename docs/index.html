@@ -158,6 +158,25 @@
       .button:hover {
         filter: brightness(1.1);
       }
+      /* like button explicit styles (no other impact) */
+      .like-btn {
+        background: #0b1221;
+        border: 1px solid #13223d;
+        color: var(--text);
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .like-btn.liked,
+      .like-btn[disabled].liked {
+        background: #122a1f;
+        border-color: #1b5e3a;
+        color: #86efac;
+      }
+      .like-btn:disabled {
+        opacity: 1;
+        cursor: default;
+      }
       .muted {
         color: var(--muted);
       }
