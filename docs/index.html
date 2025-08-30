@@ -413,7 +413,7 @@
         if (!res.ok) {
           res = await ghGet(`${API_BASE}/rules`);
         }
-        if (!res.ok) throw new Error("rules list fetch failed");
+        if (!res.ok) return [];
         /** @type {{name:string,path:string,download_url:string,type:string}[]} */
         const items = (await res.json()).filter(
           (x) => x && x.type === "file" && x.name.toLowerCase().endsWith(".md"),

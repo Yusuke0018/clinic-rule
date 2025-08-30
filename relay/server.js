@@ -676,6 +676,40 @@ app.get("/proposals", async (req, res) => {
   }
 });
 
+// List rule files (docs/rules or rules)
+app.get("/rules", async (req, res) => {
+  try {
+    const s = getSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const [owner, repo] = String(github_repo).split("/");
+    const gh = async (path) => {
+      const r = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+        {
+          headers: {
+            Authorization: `Bearer ${github_token}`,
+            Accept: "application/vnd.github+json",
+            "User-Agent": "clinic-rule-relay",
+          },
+        },
+      );
+      if (!r.ok) return null;
+      return await r.json();
+    };
+    let items = (await gh("docs/rules")) || (await gh("rules")) || [];
+    items = Array.isArray(items) ? items : [];
+    const files = items
+      .filter((x) => x && x.type === "file" && /\.md$/i.test(x.name))
+      .map((x) => ({ name: x.name }));
+    return res.json(files);
+  } catch (e) {
+    console.error("rules list error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
   console.log("relay listening on :" + port);
