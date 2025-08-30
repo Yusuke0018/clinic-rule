@@ -525,23 +525,7 @@
                 <button id="p-submit" type="submit">送信</button>
                 <div id="p-result" class="muted"></div>
               </form>
-              <hr style="border-color:#13223d" />
-              <h2 style="font-size:16px">提案の編集/削除</h2>
-              <p class="muted">作成時に表示された「削除コード」と「提案番号」を使って編集・削除できます。</p>
-              <form id="e-form" style="display:grid;gap:10px;max-width:640px;">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                  <label>提案番号<br><input id="e-number" required placeholder="例) 12" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></label>
-                  <label>削除コード<br><input id="e-token" required placeholder="半角英数字" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></label>
-                </div>
-                <label>新しいタイトル（提案）<br><input id="e-title" placeholder="（変更しない場合は空）" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></label>
-                <label>新しい内容や理由<br><textarea id="e-reason" rows="6" placeholder="（変更しない場合は空）" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></textarea></label>
-                <label>登録者（再入力）<br><input id="e-author" placeholder="例) 山田" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></label>
-                <div style="display:flex;gap:8px;">
-                  <button id="e-update" type="button">更新</button>
-                  <button id="e-delete" type="button">削除</button>
-                </div>
-                <div id="e-result" class="muted"></div>
-              </form>
+              
             `;
             const form = document.getElementById("p-form");
             const result = document.getElementById("p-result");
@@ -608,75 +592,6 @@
               } catch (_) {
                 result.textContent =
                   "送信に失敗しました。ネットワークをご確認ください。";
-              }
-            });
-            // 編集/削除フォーム
-            const eForm = document.getElementById("e-form");
-            const eRes = document.getElementById("e-result");
-            const byId = (id) => document.getElementById(id);
-            byId("e-update").addEventListener("click", async () => {
-              const num = byId("e-number").value.trim();
-              const token = byId("e-token").value.trim();
-              const title = byId("e-title").value.trim();
-              const reason = byId("e-reason").value.trim();
-              const author = byId("e-author").value.trim();
-              if (!num || !token || !author) {
-                eRes.textContent = "番号/削除コード/登録者 は必須です。";
-                return;
-              }
-              if (!title && !reason) {
-                eRes.textContent =
-                  "タイトルか内容のどちらかを入力してください。";
-                return;
-              }
-              eRes.textContent = "更新中…";
-              try {
-                const resp = await fetch(`${RELAY_URL}/proposal/edit`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    number: num,
-                    token,
-                    title: title || "(変更なし)",
-                    reason: reason || "(変更なし)",
-                    author,
-                  }),
-                });
-                if (resp.ok) {
-                  eRes.innerHTML =
-                    "更新しました。ページを再読み込みすると反映が見えます。";
-                } else {
-                  eRes.textContent =
-                    "更新に失敗しました。入力内容をご確認ください。";
-                }
-              } catch (_) {
-                eRes.textContent =
-                  "更新に失敗しました。ネットワークをご確認ください。";
-              }
-            });
-            byId("e-delete").addEventListener("click", async () => {
-              const num = byId("e-number").value.trim();
-              const token = byId("e-token").value.trim();
-              if (!num || !token) {
-                eRes.textContent = "番号と削除コードを入力してください。";
-                return;
-              }
-              eRes.textContent = "削除中…";
-              try {
-                const resp = await fetch(`${RELAY_URL}/proposal/withdraw`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ number: num, token }),
-                });
-                if (resp.ok) {
-                  eRes.textContent = "削除しました。";
-                } else {
-                  eRes.textContent =
-                    "削除に失敗しました。番号・削除コードをご確認ください。";
-                }
-              } catch (_) {
-                eRes.textContent =
-                  "削除に失敗しました。ネットワークをご確認ください。";
               }
             });
           } else {
