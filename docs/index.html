@@ -436,12 +436,13 @@
           const items = await listProposals().catch(() => []);
           const nums = items.map((x) => x.number);
           await loadConfig();
-          const likesMap = await (async () => {
-            try {
-              const r = await fetch(`${location.origin}`);
-            } catch (_) {}
-            return getLikesBulk ? await getLikesBulk(nums) : {};
-          })();
+          const likesMap = await getLikesBulk(nums);
+          items.sort((a, b) => {
+            const la = likesMap[String(a.number)] || 0;
+            const lb = likesMap[String(b.number)] || 0;
+            if (lb !== la) return lb - la;
+            return new Date(b.created_at) - new Date(a.created_at);
+          });
           CONTENT.innerHTML = `
             <h1>審議中のルール</h1>
             <div id="proposal-list"></div>
