@@ -671,6 +671,8 @@ app.get("/proposals", async (req, res) => {
       body: x.body || "",
       created_at: x.created_at,
       comments_count: typeof x.comments === "number" ? x.comments : 0,
+      reactions_plus_one:
+        (x.reactions && (x.reactions["+1"] || x.reactions.plus_one)) || 0,
     }));
     res.json(out);
   } catch (e) {
