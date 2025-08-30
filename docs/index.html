@@ -36,6 +36,8 @@
           Segoe UI Emoji,
           Segoe UI Symbol;
         color: var(--text);
+        font-size: 16.5px;
+        line-height: 1.7;
         background: radial-gradient(
             1200px 800px at 10% -10%,
             rgba(167, 139, 250, 0.15),
@@ -85,7 +87,7 @@
         box-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
       }
       .brand h1 {
-        font-size: 16px;
+        font-size: 18px;
         margin: 0;
         letter-spacing: 0.2px;
       }
@@ -96,8 +98,8 @@
       }
       .nav a {
         display: block;
-        padding: 8px 10px;
-        border-radius: 8px;
+        padding: 10px 12px;
+        border-radius: 10px;
         border: 1px solid transparent;
         color: var(--text);
       }
@@ -141,15 +143,19 @@
         color: var(--muted);
         font-size: 13px;
       }
-      .toolbar button {
+      .toolbar button,
+      .button {
         background: #0b1221;
         color: var(--text);
         border: 1px solid #13223d;
-        padding: 6px 10px;
-        border-radius: 8px;
+        padding: 9px 14px;
+        border-radius: 10px;
         cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
       }
-      .toolbar button:hover {
+      .toolbar button:hover,
+      .button:hover {
         filter: brightness(1.1);
       }
       .muted {
@@ -169,6 +175,34 @@
         padding: 12px;
         border-radius: 10px;
         overflow: auto;
+      }
+      .card {
+        border: 1px solid #13223d;
+        border-radius: 12px;
+        padding: 14px;
+        background: #0b1221;
+      }
+      .md :where(p, ul, ol) {
+        margin: 10px 0;
+      }
+      .md h1,
+      .md h2,
+      .md h3,
+      .md h4 {
+        margin: 12px 0 8px;
+      }
+      .md code {
+        background: #0f223e;
+        padding: 2px 6px;
+        border-radius: 6px;
+        border: 1px solid #1a2e52;
+      }
+      .excerpt {
+        color: var(--muted);
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
       code {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -239,6 +273,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
     <script>
       // 設定
       const OWNER = "Yusuke0018";
@@ -260,6 +295,8 @@
       SITE_URL.textContent = SITE_URL.href;
 
       // ユーティリティ
+      const sanitize = (html) => DOMPurify.sanitize(html);
+      marked.setOptions({ breaks: true });
       const escapeHtml = (s) =>
         s
           .replaceAll("&", "&amp;")
@@ -276,7 +313,19 @@
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
         const text = await res.text();
-        CONTENT.innerHTML = marked.parse(text);
+        CONTENT.innerHTML = sanitize(marked.parse(text));
+      };
+      const ghGet = (url) =>
+        fetch(url, {
+          cache: "no-store",
+          headers: { Accept: "application/vnd.github+json" },
+        });
+      const renderMdString = (md) => sanitize(marked.parse(md || ""));
+      const mdExcerpt = (md, n = 220) => {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = renderMdString(md || "");
+        const txt = tmp.textContent || "";
+        return txt.length > n ? txt.slice(0, n) + "…" : txt;
       };
       const ghGet = (url) =>
         fetch(url, {
@@ -583,7 +632,7 @@
             const comments = commentsRes.ok ? await commentsRes.json() : [];
             CONTENT.innerHTML = `
               <h1>${escapeHtml(title)}</h1>
-              <pre style="white-space:pre-wrap;margin:0 0 12px 0;">${escapeHtml(body)}</pre>
+              <div class="md">${renderMdString(body)}</div>
               <div id="opinions"></div>
               <hr style="border-color:#13223d" />
               <h2 style="font-size:16px">意見を書く</h2>
@@ -606,12 +655,12 @@
             }
             const fmt = (c) => {
               const when = new Date(c.created_at).toLocaleString("ja-JP");
-              return `<section style="border:1px solid #13223d;border-radius:10px;padding:10px;margin:10px 0;background:#0b1221;">
+              return `<section class="card">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                   <div class=\"muted\">#${c.id} • ${when}</div>
                   <a href="${c.html_url}" target="_blank" rel="noopener">GitHub</a>
                 </div>
-                <pre style="white-space:pre-wrap;margin:6px 0 0 0;">${escapeHtml(c.body || "")}</pre>
+                <div class="md" style="margin-top:6px;">${renderMdString(c.body || "")}</div>
               </section>`;
             };
             list.innerHTML =
@@ -701,15 +750,15 @@
               const likes =
                 (likesMap && (likesMap[String(x.number)] || 0)) || 0;
               return `
-              <section style="border:1px solid #13223d;border-radius:10px;padding:12px;margin:12px 0;background:#0b1221;display:grid;gap:8px;">
+              <section class="card" style="display:grid;gap:10px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                  <h3 style="margin:0;font-size:16px;">${escapeHtml(title)}</h3>
+                  <h3 style="margin:0;font-size:18px;">${escapeHtml(title)}</h3>
                   <div style="display:flex;gap:8px;align-items:center;">
                     <a href="#/pending/${x.number}">意見を見る・書く</a>
                     <a href="${url}" target="_blank" rel="noopener">GitHub</a>
                   </div>
                 </div>
-                <pre style="white-space:pre-wrap;margin:0;">${escapeHtml(body)}</pre>
+                <div class="excerpt">${escapeHtml(mdExcerpt(body, 240))}</div>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <button data-like="${x.number}" class="like-btn">👍 いいね <span>(${likes})</span></button>
                   <span class="muted">1人1回（同じ端末では二重押し不可）</span>
