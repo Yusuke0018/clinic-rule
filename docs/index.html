@@ -411,6 +411,34 @@
                 const json = await resp.json();
                 if (resp.ok) {
                   result.innerHTML = `受け付けました。<a href="${json.url}" target="_blank" rel="noopener">審議ページを開く</a>`;
+                  const del = document.createElement("div");
+                  del.innerHTML = `<div style=\"margin-top:8px\">削除コード: <code>${"token" in json ? json.token : ""}</code>（控えておくと、あとで削除できます）</div>`;
+                  result.appendChild(del);
+                  const btn = document.createElement("button");
+                  btn.textContent = "この提案を削除する";
+                  btn.addEventListener("click", async () => {
+                    btn.disabled = true;
+                    try {
+                      const r = await fetch(`${RELAY_URL}/proposal/withdraw`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          number: json.number,
+                          token: json.token,
+                        }),
+                      });
+                      if (r.ok) {
+                        result.innerHTML = "削除しました。";
+                      } else {
+                        result.innerHTML =
+                          "削除に失敗しました。時間を置いて再度お試しください。";
+                      }
+                    } catch (_) {
+                      result.innerHTML =
+                        "削除に失敗しました。ネットワークをご確認ください。";
+                    }
+                  });
+                  result.appendChild(btn);
                   form.reset();
                 } else {
                   result.textContent =

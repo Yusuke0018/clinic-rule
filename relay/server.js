@@ -40,6 +40,7 @@ app.use(limiter);
 const dataDir = __dirname;
 const secretPath = path.join(dataDir, "secrets.json");
 const likesPath = path.join(dataDir, "likes.json");
+const proposalsPath = path.join(dataDir, "proposals.json");
 
 function readSecrets() {
   try {
@@ -67,6 +68,18 @@ function readLikes() {
 }
 function writeLikes(obj) {
   fs.writeFileSync(likesPath, JSON.stringify(obj, null, 2), {
+    encoding: "utf8",
+  });
+}
+function readProposals() {
+  try {
+    return JSON.parse(fs.readFileSync(proposalsPath, "utf8")) || {};
+  } catch (_e) {
+    return {};
+  }
+}
+function writeProposals(obj) {
+  fs.writeFileSync(proposalsPath, JSON.stringify(obj, null, 2), {
     encoding: "utf8",
   });
 }
@@ -291,9 +304,73 @@ app.post("/proposal", async (req, res) => {
     const json = await resp.json();
     if (!resp.ok)
       return res.status(resp.status).json({ error: "gh_error", details: json });
-    return res.status(200).json({ number: json.number, url: json.html_url });
+    // 保存: 撤回トークン
+    const token = genSecret(16);
+    const map = readProposals();
+    map[String(json.number)] = { token, created_at: Date.now() };
+    writeProposals(map);
+    return res
+      .status(200)
+      .json({ number: json.number, url: json.html_url, token });
   } catch (e) {
     console.error("proposal error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Withdraw proposal: POST {number, token}
+app.post("/proposal/withdraw", async (req, res) => {
+  try {
+    const s = readSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const { number, token } = req.body || {};
+    const n = String(number || "").trim();
+    const t = String(token || "").trim();
+    if (!n || !t) return res.status(400).json({ error: "invalid_params" });
+    const map = readProposals();
+    if (!map[n] || map[n].token !== t)
+      return res.status(403).json({ error: "forbidden" });
+    const [owner, repo] = String(github_repo).split("/");
+    // close issue, redact body, lock
+    const gh = async (method, path, body) => {
+      const r = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}${path}`,
+        {
+          method,
+          headers: {
+            Authorization: `Bearer ${github_token}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "clinic-rule-relay",
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        },
+      );
+      if (!r.ok) throw new Error(`gh ${method} ${path} ${r.status}`);
+      return r.json();
+    };
+    // Get current issue to prefix title
+    let title = `#${n}`;
+    try {
+      const cur = await gh("GET", `/issues/${n}`);
+      title = cur.title || title;
+    } catch {}
+    await gh("PATCH", `/issues/${n}`, {
+      title: `[削除] ${title}`.slice(0, 250),
+      body: `この提案は送信者によって削除されました。`,
+      state: "closed",
+    });
+    try {
+      await gh("PUT", `/issues/${n}/lock`, { lock_reason: "resolved" });
+    } catch {}
+    // remove mapping
+    delete map[n];
+    writeProposals(map);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("withdraw error", e.message);
     return res.status(500).json({ error: "server_error" });
   }
 });
