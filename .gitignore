@@ -1,6 +1,7 @@
 relay/secrets.json
 relay/likes.json
 relay/proposals.json
+relay/comments.json
 node_modules/
 .DS_Store
 .codex/

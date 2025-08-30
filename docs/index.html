@@ -543,10 +543,99 @@
             `;
           }
         },
-        pending: async () => {
+        pending: async (num) => {
           BREAD.textContent = "pending";
           setActive("pending");
           RULES_BLOCK.classList.add("hidden");
+
+          // 詳細ビュー（意見の閲覧/投稿）
+          if (num) {
+            await loadConfig();
+            const n = Number(num);
+            const issueRes = await fetch(`${API_ISSUES}/${n}`);
+            if (!issueRes.ok) {
+              CONTENT.innerHTML = '<p class="muted">提案が見つかりません。</p>';
+              return;
+            }
+            const issue = await issueRes.json();
+            const title = (issue.title || "").replace(/^\[提案\]\s*/, "");
+            const body = issue.body || "";
+            const commentsRes = await fetch(
+              `${API_ISSUES}/${n}/comments?per_page=100`,
+            );
+            const comments = commentsRes.ok ? await commentsRes.json() : [];
+            CONTENT.innerHTML = `
+              <h1>${escapeHtml(title)}</h1>
+              <pre style="white-space:pre-wrap;margin:0 0 12px 0;">${escapeHtml(body)}</pre>
+              <div id="opinions"></div>
+              <hr style="border-color:#13223d" />
+              <h2 style="font-size:16px">意見を書く</h2>
+              <div id="op-form-wrap"></div>
+            `;
+            const list = document.getElementById("opinions");
+            const fmt = (c) => {
+              const when = new Date(c.created_at).toLocaleString("ja-JP");
+              return `<section style="border:1px solid #13223d;border-radius:10px;padding:10px;margin:10px 0;background:#0b1221;">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div class=\"muted\">#${c.id} • ${when}</div>
+                  <a href="${c.html_url}" target="_blank" rel="noopener">GitHub</a>
+                </div>
+                <pre style="white-space:pre-wrap;margin:6px 0 0 0;">${escapeHtml(c.body || "")}</pre>
+              </section>`;
+            };
+            list.innerHTML =
+              comments.map(fmt).join("") ||
+              '<p class="muted">まだ意見はありません。</p>';
+            const wrap = document.getElementById("op-form-wrap");
+            if (RELAY_URL) {
+              wrap.innerHTML = `
+                <form id="op-form" style="display:grid;gap:10px;max-width:720px;">
+                  <label>お名前（任意）<br><input id="op-name" placeholder="例) 山田" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></label>
+                  <label>ご意見<br><textarea id="op-body" required rows="5" placeholder="感じたこと、具体案、懸念点など" style="width:100%;padding:10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text)"></textarea></label>
+                  <button type="submit">投稿</button>
+                  <div id="op-result" class="muted"></div>
+                </form>
+              `;
+              const form = document.getElementById("op-form");
+              const result = document.getElementById("op-result");
+              form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                result.textContent = "送信中…";
+                const author = document.getElementById("op-name").value.trim();
+                const body = document.getElementById("op-body").value.trim();
+                try {
+                  const r = await fetch(`${RELAY_URL}/comment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ issue: n, author, body }),
+                  });
+                  const j = await r.json();
+                  if (r.ok) {
+                    result.innerHTML = `投稿しました。<a href="${j.url}" target="_blank" rel="noopener">GitHubで見る</a> / 削除コード: <code>${j.token || ""}</code>`;
+                    comments.unshift({
+                      id: j.id,
+                      html_url: j.url,
+                      created_at: new Date().toISOString(),
+                      body: `【投稿者】${author || "（未記入）"}\n\n${body}`,
+                    });
+                    list.innerHTML = comments.map(fmt).join("");
+                    form.reset();
+                  } else {
+                    result.textContent =
+                      "送信に失敗しました。入力内容をご確認の上、時間を置いて再度お試しください。";
+                  }
+                } catch (_) {
+                  result.textContent = "ネットワークエラーです。";
+                }
+              });
+            } else {
+              wrap.innerHTML =
+                '<p class="muted">管理者がrelayを設定すると、この画面から意見投稿できます。</p>';
+            }
+            return;
+          }
+
+          // 一覧ビュー
           const items = await listProposals().catch(() => []);
           const nums = items.map((x) => x.number);
           await loadConfig();
@@ -578,12 +667,15 @@
               <section style="border:1px solid #13223d;border-radius:10px;padding:12px;margin:12px 0;background:#0b1221;display:grid;gap:8px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
                   <h3 style="margin:0;font-size:16px;">${escapeHtml(title)}</h3>
-                  <a href="${url}" target="_blank" rel="noopener">GitHubで開く</a>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <a href="#/pending/${x.number}">意見を見る・書く</a>
+                    <a href="${url}" target="_blank" rel="noopener">GitHub</a>
+                  </div>
                 </div>
                 <pre style="white-space:pre-wrap;margin:0;">${escapeHtml(body)}</pre>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <button data-like="${x.number}" class="like-btn">👍 いいね <span>(${likes})</span></button>
-                  <span class="muted">1ユーザー1回（GitHubの👍リアクション）</span>
+                  <span class="muted">1人1回（同じ端末では二重押し不可）</span>
                 </div>
               </section>`;
             })

@@ -41,6 +41,7 @@ const dataDir = __dirname;
 const secretPath = path.join(dataDir, "secrets.json");
 const likesPath = path.join(dataDir, "likes.json");
 const proposalsPath = path.join(dataDir, "proposals.json");
+const commentsPath = path.join(dataDir, "comments.json");
 
 function readSecrets() {
   try {
@@ -80,6 +81,19 @@ function readProposals() {
 }
 function writeProposals(obj) {
   fs.writeFileSync(proposalsPath, JSON.stringify(obj, null, 2), {
+    encoding: "utf8",
+  });
+}
+
+function readCommentsMap() {
+  try {
+    return JSON.parse(fs.readFileSync(commentsPath, "utf8")) || {};
+  } catch (_e) {
+    return {};
+  }
+}
+function writeCommentsMap(obj) {
+  fs.writeFileSync(commentsPath, JSON.stringify(obj, null, 2), {
     encoding: "utf8",
   });
 }
@@ -383,6 +397,137 @@ app.post("/proposal/withdraw", async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error("withdraw error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Add a comment to an issue (for opinions without GitHub account)
+// POST {issue:number, author:string, body:string}
+app.post("/comment", async (req, res) => {
+  try {
+    const s = readSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const { issue, author, body } = req.body || {};
+    const n = Number(issue || 0);
+    if (!n || !body) return res.status(400).json({ error: "invalid_params" });
+    const [owner, repo] = String(github_repo).split("/");
+    const content = [
+      author ? `【投稿者】${String(author).trim()}` : "【投稿者】（未記入）",
+      "",
+      String(body).trim(),
+    ].join("\n");
+    const resp = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${n}/comments`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${github_token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "User-Agent": "clinic-rule-relay",
+        },
+        body: JSON.stringify({ body: content }),
+      },
+    );
+    const json = await resp.json();
+    if (!resp.ok)
+      return res
+        .status(resp.status)
+        .json({ error: "gh_error", details: json && json.message });
+
+    // store deletion token for this comment
+    const token = genSecret(16);
+    const map = readCommentsMap();
+    map[String(json.id)] = { token, issue: n, created_at: Date.now() };
+    writeCommentsMap(map);
+    return res.json({ ok: true, id: json.id, url: json.html_url, token });
+  } catch (e) {
+    console.error("comment error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Edit a comment (token-protected)
+// POST {id:number, token:string, author?:string, body:string}
+app.post("/comment/edit", async (req, res) => {
+  try {
+    const s = readSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const { id, token, author, body } = req.body || {};
+    const cid = String(id || "").trim();
+    if (!cid || !token || !body)
+      return res.status(400).json({ error: "invalid_params" });
+    const map = readCommentsMap();
+    if (!map[cid] || map[cid].token !== token)
+      return res.status(403).json({ error: "forbidden" });
+    const [owner, repo] = String(github_repo).split("/");
+    const content = [
+      author ? `【投稿者】${String(author).trim()}` : "【投稿者】（未記入）",
+      "",
+      String(body).trim(),
+    ].join("\n");
+    const r = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/comments/${cid}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${github_token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "User-Agent": "clinic-rule-relay",
+        },
+        body: JSON.stringify({ body: content }),
+      },
+    );
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(`gh patch ${r.status} ${t}`);
+    }
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("comment edit error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Delete a comment (token-protected)
+// POST {id:number, token:string}
+app.post("/comment/delete", async (req, res) => {
+  try {
+    const s = readSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const { id, token } = req.body || {};
+    const cid = String(id || "").trim();
+    const map = readCommentsMap();
+    if (!cid || !token || !map[cid] || map[cid].token !== token)
+      return res.status(403).json({ error: "forbidden" });
+    const [owner, repo] = String(github_repo).split("/");
+    const r = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/comments/${cid}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${github_token}`,
+          Accept: "application/vnd.github+json",
+          "User-Agent": "clinic-rule-relay",
+        },
+      },
+    );
+    if (r.status !== 204) {
+      const t = await r.text();
+      throw new Error(`gh delete ${r.status} ${t}`);
+    }
+    delete map[cid];
+    writeCommentsMap(map);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("comment delete error", e.message);
     return res.status(500).json({ error: "server_error" });
   }
 });
