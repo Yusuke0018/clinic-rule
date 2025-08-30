@@ -3,6 +3,7 @@ relay/likes.json
 relay/proposals.json
 relay/comments.json
 relay/hidden.json
+.data/
 node_modules/
 .DS_Store
 .codex/

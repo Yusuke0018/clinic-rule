@@ -598,31 +598,106 @@ app.post("/proposal/edit", async (req, res) => {
 });
 
 // Likes: GET /likes?issues=1,2,3 returns {"1":10,...}
-app.get("/likes", (req, res) => {
-  const q = String(req.query.issues || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const all = readLikes();
-  const out = {};
-  for (const id of q) out[id] = (all[id] && all[id].count) || 0;
-  res.json(out);
+app.get("/likes", async (req, res) => {
+  try {
+    const q = String(req.query.issues || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (persistLikesEnabled()) {
+      try {
+        const { github_token, github_repo } = getSecrets();
+        const [owner, repo] = String(github_repo || "").split("/");
+        const { map } = await readLikesRepo({
+          owner,
+          repo,
+          token: github_token,
+        });
+        const out = {};
+        for (const id of q) out[id] = (map[id] && map[id].count) || 0;
+        return res.json(out);
+      } catch (e) {
+        console.error("likes repo read error", e.message);
+        // fallthrough to local
+      }
+    }
+    const all = readLikes();
+    const out = {};
+    for (const id of q) out[id] = (all[id] && all[id].count) || 0;
+    return res.json(out);
+  } catch (e) {
+    console.error("likes error", e.message);
+    return res.status(500).json({});
+  }
 });
 
 // Like one: POST {issue:number, uid:string}
-app.post("/like", (req, res) => {
+app.post("/like", async (req, res) => {
   try {
     const { issue, uid } = req.body || {};
     const id = String(issue || "").trim();
     const u = String(uid || "").trim();
     if (!id || !u) return res.status(400).json({ error: "invalid_params" });
-    const all = readLikes();
-    if (!all[id]) all[id] = { count: 0, uids: {} };
-    const bucket = all[id];
     const key = crypto
       .createHash("sha256")
       .update("salt::" + u)
       .digest("hex");
+
+    // Persistent path via GitHub repo
+    if (persistLikesEnabled()) {
+      try {
+        const { github_token, github_repo } = getSecrets();
+        const [owner, repo] = String(github_repo || "").split("/");
+        let { map, sha } = await readLikesRepo({
+          owner,
+          repo,
+          token: github_token,
+        });
+        if (!map[id]) map[id] = { count: 0, uids: {} };
+        if (map[id].uids && map[id].uids[key]) {
+          return res.json({ ok: true, dup: true, count: map[id].count });
+        }
+        if (!map[id].uids) map[id].uids = {};
+        map[id].uids[key] = 1;
+        map[id].count = (map[id].count || 0) + 1;
+        let tries = 0;
+        while (tries < 2) {
+          try {
+            const newSha = await writeLikesRepo({
+              owner,
+              repo,
+              token: github_token,
+              map,
+              sha,
+              message: `chore(likes): +1 issue ${id}`,
+            });
+            sha = newSha;
+            break;
+          } catch (e) {
+            // retry on SHA mismatch
+            tries++;
+            const r = await readLikesRepo({ owner, repo, token: github_token });
+            map = r.map;
+            sha = r.sha;
+            if (!map[id]) map[id] = { count: 0, uids: {} };
+            if (map[id].uids && map[id].uids[key]) {
+              return res.json({ ok: true, dup: true, count: map[id].count });
+            }
+            map[id].uids[key] = 1;
+            map[id].count = (map[id].count || 0) + 1;
+          }
+        }
+        return res.json({ ok: true, count: map[id].count });
+      } catch (e) {
+        console.error("like persist error", e.message);
+        // fallthrough to local as best effort
+      }
+    }
+
+    // Local file fallback (existing behavior)
+    const all = readLikes();
+    if (!all[id]) all[id] = { count: 0, uids: {} };
+    const bucket = all[id];
     if (bucket.uids[key])
       return res.json({ ok: true, dup: true, count: bucket.count });
     bucket.uids[key] = 1;
