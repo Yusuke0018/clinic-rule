@@ -278,6 +278,11 @@
         const text = await res.text();
         CONTENT.innerHTML = marked.parse(text);
       };
+      const ghGet = (url) =>
+        fetch(url, {
+          cache: "no-store",
+          headers: { Accept: "application/vnd.github+json" },
+        });
 
       // 追加設定: relay 経由で投稿/いいね（GitHubアカウント不要）
       let RELAY_URL = null;
@@ -564,7 +569,7 @@
           if (num) {
             await loadConfig();
             const n = Number(num);
-            const issueRes = await fetch(`${API_ISSUES}/${n}`);
+            const issueRes = await ghGet(`${API_ISSUES}/${n}`);
             if (!issueRes.ok) {
               CONTENT.innerHTML = '<p class="muted">提案が見つかりません。</p>';
               return;
@@ -572,7 +577,7 @@
             const issue = await issueRes.json();
             const title = (issue.title || "").replace(/^\[提案\]\s*/, "");
             const body = issue.body || "";
-            const commentsRes = await fetch(
+            const commentsRes = await ghGet(
               `${API_ISSUES}/${n}/comments?per_page=100`,
             );
             const comments = commentsRes.ok ? await commentsRes.json() : [];
@@ -585,11 +590,11 @@
               <div id="op-form-wrap"></div>
             `;
             const list = document.getElementById("opinions");
-            async function refreshComments() {
+            async function refreshComments(delayMs = 0) {
               try {
-                const res = await fetch(
+                if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+                const res = await ghGet(
                   `${API_ISSUES}/${n}/comments?per_page=100`,
-                  { cache: "no-store" },
                 );
                 if (res.ok) {
                   const latest = await res.json();
@@ -638,7 +643,7 @@
                   const j = await r.json();
                   if (r.ok) {
                     result.innerHTML = `投稿しました。<a href="${j.url}" target="_blank" rel="noopener">GitHubで見る</a> / 削除コード: <code>${j.token || ""}</code>`;
-                    await refreshComments();
+                    await refreshComments(1200);
                     form.reset();
                   } else {
                     const msg = j && j.error ? j.error : "unknown_error";
