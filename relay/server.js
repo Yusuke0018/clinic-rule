@@ -110,6 +110,8 @@ const adminAuth = basicAuth({
 });
 
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
+// RenderのデフォルトHealth Check対策としてルートも200を返す
+app.get("/", (_req, res) => res.status(200).send("ok"));
 
 app.get("/admin", adminAuth, (req, res) => {
   if (!ipAllowed(req)) return res.status(403).send("forbidden");
