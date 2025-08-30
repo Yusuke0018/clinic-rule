@@ -315,11 +315,7 @@
         const text = await res.text();
         CONTENT.innerHTML = sanitize(marked.parse(text));
       };
-      const ghGet = (url) =>
-        fetch(url, {
-          cache: "no-store",
-          headers: { Accept: "application/vnd.github+json" },
-        });
+
       const renderMdString = (md) => sanitize(marked.parse(md || ""));
       const mdExcerpt = (md, n = 220) => {
         const tmp = document.createElement("div");
