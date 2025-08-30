@@ -890,7 +890,9 @@
               const baseLikes =
                 typeof x.reactions_plus_one === "number"
                   ? x.reactions_plus_one
-                  : 0;
+                  : (x.reactions &&
+                      (x.reactions["+1"] || x.reactions.plus_one)) ||
+                    0;
               const likes =
                 (likesMap && (likesMap[String(x.number)] || baseLikes)) ||
                 baseLikes;
