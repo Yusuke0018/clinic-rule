@@ -585,6 +585,20 @@
               <div id="op-form-wrap"></div>
             `;
             const list = document.getElementById("opinions");
+            async function refreshComments() {
+              try {
+                const res = await fetch(
+                  `${API_ISSUES}/${n}/comments?per_page=100`,
+                  { cache: "no-store" },
+                );
+                if (res.ok) {
+                  const latest = await res.json();
+                  list.innerHTML =
+                    latest.map(fmt).join("") ||
+                    '<p class="muted">まだ意見はありません。</p>';
+                }
+              } catch (_) {}
+            }
             const fmt = (c) => {
               const when = new Date(c.created_at).toLocaleString("ja-JP");
               return `<section style="border:1px solid #13223d;border-radius:10px;padding:10px;margin:10px 0;background:#0b1221;">
@@ -624,13 +638,7 @@
                   const j = await r.json();
                   if (r.ok) {
                     result.innerHTML = `投稿しました。<a href="${j.url}" target="_blank" rel="noopener">GitHubで見る</a> / 削除コード: <code>${j.token || ""}</code>`;
-                    comments.unshift({
-                      id: j.id,
-                      html_url: j.url,
-                      created_at: new Date().toISOString(),
-                      body: `【投稿者】${author || "（未記入）"}\n\n${body}`,
-                    });
-                    list.innerHTML = comments.map(fmt).join("");
+                    await refreshComments();
                     form.reset();
                   } else {
                     const msg = j && j.error ? j.error : "unknown_error";
