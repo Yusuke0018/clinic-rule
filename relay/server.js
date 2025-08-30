@@ -631,7 +631,9 @@ app.get("/likes", async (req, res) => {
   }
 });
 
-// Like one: POST {issue:number, uid:string}
+// Like toggle: POST {issue:number, uid:string}
+// - 1回目: +1（いいね）
+// - 2回目: -1（取り消し）
 app.post("/like", async (req, res) => {
   try {
     const { issue, uid } = req.body || {};
@@ -654,12 +656,18 @@ app.post("/like", async (req, res) => {
           token: github_token,
         });
         if (!map[id]) map[id] = { count: 0, uids: {} };
-        if (map[id].uids && map[id].uids[key]) {
-          return res.json({ ok: true, dup: true, count: map[id].count });
-        }
         if (!map[id].uids) map[id].uids = {};
-        map[id].uids[key] = 1;
-        map[id].count = (map[id].count || 0) + 1;
+
+        // toggle
+        let message = `chore(likes): +1 issue ${id}`;
+        if (map[id].uids[key]) {
+          delete map[id].uids[key];
+          map[id].count = Math.max(0, (map[id].count || 0) - 1);
+          message = `chore(likes): -1 issue ${id}`;
+        } else {
+          map[id].uids[key] = 1;
+          map[id].count = (map[id].count || 0) + 1;
+        }
         let tries = 0;
         while (tries < 2) {
           try {
@@ -669,7 +677,7 @@ app.post("/like", async (req, res) => {
               token: github_token,
               map,
               sha,
-              message: `chore(likes): +1 issue ${id}`,
+              message,
             });
             sha = newSha;
             break;
@@ -680,11 +688,17 @@ app.post("/like", async (req, res) => {
             map = r.map;
             sha = r.sha;
             if (!map[id]) map[id] = { count: 0, uids: {} };
-            if (map[id].uids && map[id].uids[key]) {
-              return res.json({ ok: true, dup: true, count: map[id].count });
+            if (!map[id].uids) map[id].uids = {};
+            // recompute toggle against latest
+            if (map[id].uids[key]) {
+              delete map[id].uids[key];
+              map[id].count = Math.max(0, (map[id].count || 0) - 1);
+              message = `chore(likes): -1 issue ${id}`;
+            } else {
+              map[id].uids[key] = 1;
+              map[id].count = (map[id].count || 0) + 1;
+              message = `chore(likes): +1 issue ${id}`;
             }
-            map[id].uids[key] = 1;
-            map[id].count = (map[id].count || 0) + 1;
           }
         }
         return res.json({ ok: true, count: map[id].count });
@@ -698,10 +712,14 @@ app.post("/like", async (req, res) => {
     const all = readLikes();
     if (!all[id]) all[id] = { count: 0, uids: {} };
     const bucket = all[id];
-    if (bucket.uids[key])
-      return res.json({ ok: true, dup: true, count: bucket.count });
-    bucket.uids[key] = 1;
-    bucket.count += 1;
+    if (!bucket.uids) bucket.uids = {};
+    if (bucket.uids[key]) {
+      delete bucket.uids[key];
+      bucket.count = Math.max(0, (bucket.count || 0) - 1);
+    } else {
+      bucket.uids[key] = 1;
+      bucket.count = (bucket.count || 0) + 1;
+    }
     writeLikes(all);
     return res.json({ ok: true, count: bucket.count });
   } catch (e) {

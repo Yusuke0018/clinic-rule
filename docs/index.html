@@ -826,7 +826,7 @@
                 <div class="excerpt">${escapeHtml(mdExcerpt(body, 240))}</div>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <button data-like="${x.number}" class="like-btn">👍 いいね <span>(${likes})</span></button>
-                  <span class="muted">1人1回（同じ端末では二重押し不可）</span>
+                  <span class="muted">もう一度押すと取り消し</span>
                 </div>
               </section>`;
             })
@@ -896,22 +896,26 @@
           wrap.querySelectorAll(".like-btn").forEach((btn) => {
             const id = btn.getAttribute("data-like");
             const key = `liked-${id}`;
+            const span = btn.querySelector("span");
             const liked = localStorage.getItem(key) === "1";
-            if (liked) {
-              btn.setAttribute("disabled", "true");
-              btn.classList.add("liked");
-            }
+            if (liked) btn.classList.add("liked");
             btn.addEventListener("click", async () => {
-              localStorage.setItem(key, "1");
-              btn.setAttribute("disabled", "true");
-              btn.classList.add("liked");
-              if (typeof postLike === "function") {
-                try {
-                  const r = await postLike(id);
-                  const span = btn.querySelector("span");
-                  if (r && span && typeof r.count === "number")
-                    span.textContent = `(${r.count})`;
-                } catch (_) {}
+              try {
+                const r = await postLike(id);
+                if (r && span && typeof r.count === "number") {
+                  span.textContent = `(${r.count})`;
+                }
+                // トグルUI（ローカル状態を信頼）
+                const nowLiked = localStorage.getItem(key) === "1";
+                if (nowLiked) {
+                  localStorage.removeItem(key);
+                  btn.classList.remove("liked");
+                } else {
+                  localStorage.setItem(key, "1");
+                  btn.classList.add("liked");
+                }
+              } catch (_) {
+                // noop
               }
             });
           });
