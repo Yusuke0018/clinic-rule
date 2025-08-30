@@ -668,6 +668,7 @@ app.get("/proposals", async (req, res) => {
       html_url: x.html_url,
       body: x.body || "",
       created_at: x.created_at,
+      comments_count: typeof x.comments === "number" ? x.comments : 0,
     }));
     res.json(out);
   } catch (e) {

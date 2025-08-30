@@ -182,6 +182,17 @@
         padding: 14px;
         background: #0b1221;
       }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #1b2742;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12.5px;
+        background: #0b1221;
+        color: var(--muted);
+      }
       .md :where(p, ul, ol) {
         margin: 10px 0;
       }
@@ -762,6 +773,12 @@
               const title = x.title.replace(/^\[提案\]\s*/, "");
               const url = x.html_url;
               const body = (x.body || "").split("\n").slice(0, 6).join("\n");
+              const commentsCount =
+                typeof x.comments_count === "number"
+                  ? x.comments_count
+                  : typeof x.comments === "number"
+                    ? x.comments
+                    : 0;
               const likes =
                 (likesMap && (likesMap[String(x.number)] || 0)) || 0;
               return `
@@ -772,6 +789,9 @@
                     <a href="#/pending/${x.number}">意見を見る・書く</a>
                     <a href="${url}" target="_blank" rel="noopener">GitHub</a>
                   </div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <span class="chip">💬 ${commentsCount}</span>
                 </div>
                 <div class="excerpt">${escapeHtml(mdExcerpt(body, 240))}</div>
                 <div style="display:flex;align-items:center;gap:8px;">
