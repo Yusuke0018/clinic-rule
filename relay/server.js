@@ -635,6 +635,47 @@ app.post("/like", (req, res) => {
   }
 });
 
+// Authenticated proposals list to avoid client rate limits
+app.get("/proposals", async (req, res) => {
+  try {
+    const s = getSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const [owner, repo] = String(github_repo).split("/");
+    const url = `https://api.github.com/repos/${owner}/${repo}/issues?state=open&per_page=100&sort=created&direction=desc`;
+    const r = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${github_token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "clinic-rule-relay",
+      },
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(`gh list issues ${r.status} ${t}`);
+    }
+    const all = (await r.json()).filter((x) => !x.pull_request);
+    const items = all.filter(
+      (x) =>
+        (Array.isArray(x.labels) &&
+          x.labels.some((l) => l && l.name === "proposal")) ||
+        (x.title || "").startsWith("[提案]"),
+    );
+    const out = items.map((x) => ({
+      number: x.number,
+      title: x.title,
+      html_url: x.html_url,
+      body: x.body || "",
+      created_at: x.created_at,
+    }));
+    res.json(out);
+  } catch (e) {
+    console.error("proposals list error", e.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
   console.log("relay listening on :" + port);

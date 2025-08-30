@@ -357,12 +357,19 @@
       };
 
       const listProposals = async () => {
-        // 正規: proposalラベル付のOpen Issue
+        await loadConfig();
+        if (RELAY_URL) {
+          try {
+            const r = await fetch(`${RELAY_URL}/proposals`, {
+              cache: "no-store",
+            });
+            if (r.ok) return await r.json();
+          } catch (_) {}
+        }
         let url = `${API_ISSUES}?labels=proposal&state=open&per_page=100&sort=created&direction=desc`;
         let res = await ghGet(url);
         let items = [];
         if (res.ok) items = (await res.json()).filter((x) => !x.pull_request);
-        // フォールバック: タイトル先頭が[提案]のOpen Issue
         if (!items.length) {
           url = `${API_ISSUES}?state=open&per_page=100&sort=created&direction=desc`;
           res = await ghGet(url);
