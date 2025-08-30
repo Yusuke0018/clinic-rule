@@ -775,7 +775,7 @@ app.post("/like", async (req, res) => {
       bucket.uids[key] = 1;
       bucket.count = (bucket.count || 0) + 1;
     }
-    writeLikes(all);
+    try { writeLikes(all); } catch (_e) {}
     return res.json({ ok: true, count: bucket.count });
   } catch (e) {
     console.error("like error", e.message);
