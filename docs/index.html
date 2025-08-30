@@ -902,17 +902,16 @@
             btn.addEventListener("click", async () => {
               try {
                 const r = await postLike(id);
-                if (r && span && typeof r.count === "number") {
-                  span.textContent = `(${r.count})`;
-                }
-                // トグルUI（ローカル状態を信頼）
-                const nowLiked = localStorage.getItem(key) === "1";
-                if (nowLiked) {
-                  localStorage.removeItem(key);
-                  btn.classList.remove("liked");
-                } else {
-                  localStorage.setItem(key, "1");
-                  btn.classList.add("liked");
+                if (r && typeof r.count === "number") {
+                  if (span) span.textContent = `(${r.count})`;
+                  const nowLiked = localStorage.getItem(key) === "1";
+                  if (nowLiked) {
+                    localStorage.removeItem(key);
+                    btn.classList.remove("liked");
+                  } else {
+                    localStorage.setItem(key, "1");
+                    btn.classList.add("liked");
+                  }
                 }
               } catch (_) {
                 // noop
