@@ -1,0 +1,118 @@
+name: Approve Proposal to Rules
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  apply:
+    if: |
+      github.event.issue.state == 'open' &&
+      contains(join(github.event.issue.labels.*.name, ','), 'proposal') &&
+      startsWith(github.event.comment.body, '/approve')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure commenter has write permission
+        id: perm
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const user = context.payload.comment.user.login;
+            const { data } = await github.repos.getCollaboratorPermissionLevel({ owner, repo, username: user });
+            core.info(`permission: ${data.permission}`);
+            if (!['admin','write','maintain'].includes(data.permission)) {
+              core.setFailed(`@${user} に書き込み権限がありません。`);
+            }
+
+      - name: Extract rule fields from Issue body
+        id: extract
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            function pick(label) {
+              const re = new RegExp(`###\\s+${label}\\n([\\s\\S]*?)(?:\\n### |$)`, 'm');
+              const m = body.match(re);
+              return m ? m[1].trim() : '';
+            }
+            const ruleName = pick('ルール名') || pick('rule_name');
+            const ruleBody = pick('内容') || pick('rule_body');
+            if (!ruleName) core.setFailed('ルール名が取得できません');
+            if (!ruleBody) core.setFailed('内容が取得できません');
+
+            // 引数の明示ファイル名: /approve <path>
+            const cmd = context.payload.comment.body.trim();
+            const m = cmd.match(/^\/approve\s+(\S+)/);
+            const explicit = m ? m[1] : '';
+
+            function toFileName(name) {
+              const base = name
+                .replace(/[\\/\r\n\t]+/g,' ')
+                .trim()
+                .replace(/\s+/g,'_')
+                .replace(/["'`]/g,'')
+                .replace(/\.md$/i,'');
+              return base + '.md';
+            }
+            const fileName = explicit ? explicit.replace(/^rules\//,'') : toFileName(ruleName);
+            const path = `rules/${fileName}`;
+
+            core.setOutput('rule_name', ruleName);
+            core.setOutput('rule_body', ruleBody);
+            core.setOutput('path', path);
+
+      - name: Create or update rule file on main
+        id: apply_change
+        uses: actions/github-script@v7
+        env:
+          RULE_NAME: ${{ steps.extract.outputs.rule_name }}
+          RULE_BODY: ${{ steps.extract.outputs.rule_body }}
+          PATH: ${{ steps.extract.outputs.path }}
+        with:
+          script: |
+            const path = process.env.PATH;
+            const ruleName = process.env.RULE_NAME;
+            const ruleBody = process.env.RULE_BODY;
+            const { owner, repo } = context.repo;
+
+            // fetch existing file sha (if exists)
+            let sha = undefined;
+            try {
+              const res = await github.repos.getContent({ owner, repo, path, ref: 'main' });
+              if (!Array.isArray(res.data)) sha = res.data.sha;
+            } catch (e) {
+              // not found -> new file
+            }
+
+            const content = `# ${ruleName}\n\n${ruleBody}\n`;
+            const message = sha
+              ? `feat(rule): update ${path}`
+              : `feat(rule): add ${path}`;
+
+            await github.repos.createOrUpdateFileContents({
+              owner, repo, path,
+              message,
+              content: Buffer.from(content, 'utf8').toString('base64'),
+              branch: 'main',
+              sha,
+            });
+
+      - name: Close issue as applied
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const number = context.payload.issue.number;
+            await github.issues.createComment({ owner, repo, issue_number: number, body: '承認により反映しました。提案はクローズします。' });
+            await github.issues.update({ owner, repo, issue_number: number, state: 'closed' });

@@ -31,4 +31,3 @@ jobs:
             if (invalid.length) errors.push(`ファイル名規則違反: ${invalid.join(', ')}`);
             if (!hasDate) errors.push('PR本文またはタイトルに施行日(YYYY-MM-DD)を含めてください');
             if (errors.length) core.setFailed(errors.join('\n'));
-

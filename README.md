@@ -7,9 +7,10 @@
 
 使い方（スタッフ）
 
-- 申請: Issues→「院内ルール改定の提案」から送信
-- 進行: 自動PRの差分を確認→レビュア/院長が承認→マージ
-- 公開: GitHub Pagesに自動反映（docs配下）
+- 申請: 「ルール申請」ボタン もしくは Issues→「院内ルールの提案（かんたん）」から送信（ルール名と内容のみ）
+- 閲覧: 提案は全員が閲覧できます（SPAの「提案一覧」またはIssues）
+- 反映: 院長がIssueに「/approve」コメント → 自動で rules/ に反映 → 提案は自動クローズ
+- 公開: GitHub Pagesに自動反映（https://yusuke0018.github.io/clinic-rule/）
 
 管理（院長/運用）
 
@@ -27,7 +28,7 @@
 
 - 初期構成（rules/docs）とGitHub Pages公開用雛形を作成。
 - Issueフォーム／PRテンプレ／CODEOWNERSを追加。
-- ワークフロー: Issue→PR自動化、マージ後の通知＋Pages同期、週次リマインダー、規約検証、ラベル初期化。
+- ワークフロー: 「/approve」でIssueから直接コミット、マージ後の通知＋Pages同期、週次リマインダー、規約検証、ラベル初期化。
 - リレーAPI（設定画面・HMAC署名検証・Chatwork投稿）を追加。
 - 既定ルール（02〜07）を章立てで登録。
 - セットアップ資料（docs/setup.md）とチートシート（docs/cheatsheet.md）を追加。

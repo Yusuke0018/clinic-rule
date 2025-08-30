@@ -209,6 +209,7 @@
           <a href="#/home" data-route="home" class="active">ホーム</a>
           <a href="#/setup" data-route="setup">セットアップ</a>
           <a href="#/cheatsheet" data-route="cheatsheet">チートシート</a>
+          <a href="#/proposals" data-route="proposals">提案一覧</a>
           <a href="#/rules" data-route="rules">規則一覧</a>
         </div>
         <div id="rules-block" class="hidden">
@@ -249,6 +250,7 @@
       const BRANCH = "main";
       const GH_BASE = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}`;
       const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents`;
+      const API_ISSUES = `https://api.github.com/repos/${OWNER}/${REPO}/issues`;
       const CONTENT = document.getElementById("content");
       const BREAD = document.getElementById("breadcrumb");
       const NAV = document.getElementById("nav");
@@ -281,6 +283,14 @@
         if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
         const text = await res.text();
         CONTENT.innerHTML = marked.parse(text);
+      };
+
+      const listProposals = async () => {
+        const url = `${API_ISSUES}?labels=proposal&state=open&per_page=100&sort=created&direction=desc`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("issues list failed");
+        const items = (await res.json()).filter((x) => !x.pull_request);
+        return items;
       };
 
       const listRules = async () => {
@@ -348,6 +358,41 @@
           setActive("cheatsheet");
           RULES_BLOCK.classList.add("hidden");
           await renderMarkdown(`${GH_BASE}/docs/cheatsheet.md`);
+        },
+        proposals: async () => {
+          BREAD.textContent = "proposals";
+          setActive("proposals");
+          RULES_BLOCK.classList.add("hidden");
+          const items = await listProposals().catch(() => []);
+          CONTENT.innerHTML = `
+            <h1>提案一覧</h1>
+            <p class="muted">ラベル proposal が付いた未クローズの提案のみ表示します。承認・反映後は自動的に一覧から消えます。</p>
+            <p><a class="button" href="https://github.com/${OWNER}/${REPO}/issues/new?labels=proposal&template=proposal.yml" target="_blank" rel="noopener">+ 新規提案を作成</a></p>
+            <div id="proposal-list"></div>
+          `;
+          const wrap = document.getElementById("proposal-list");
+          if (!items.length) {
+            wrap.innerHTML =
+              '<p class="muted">現在、公開中の提案はありません。</p>';
+            return;
+          }
+          wrap.innerHTML = items
+            .map((x) => {
+              const title = x.title;
+              const url = x.html_url;
+              const body = (x.body || "").split("\n").slice(0, 8).join("\n");
+              const created = new Date(x.created_at).toLocaleString("ja-JP");
+              return `
+              <section style="border:1px solid #13223d;border-radius:10px;padding:12px;margin:12px 0;background:#0b1221;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <h3 style="margin:0 0 6px 0;font-size:16px;">${escapeHtml(title)}</h3>
+                  <a href="${url}" target="_blank" rel="noopener">GitHubで開く</a>
+                </div>
+                <pre style="white-space:pre-wrap">${escapeHtml(body)}</pre>
+                <div class="muted">#${x.number} • ${created} • by ${escapeHtml(x.user.login)}</div>
+              </section>`;
+            })
+            .join("");
         },
         rules: async (file) => {
           BREAD.textContent = file

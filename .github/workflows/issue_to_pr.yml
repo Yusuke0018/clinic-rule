@@ -11,8 +11,10 @@ permissions:
 
 jobs:
   convert:
+    # 旧フロー（Issue→PR）は既定で無効。必要な場合はリポジトリ変数 ENABLE_PR_FROM_ISSUE=true を設定。
     if: |
-      contains(join(github.event.issue.labels.*.name, ','), 'proposal')
+      contains(join(github.event.issue.labels.*.name, ','), 'proposal') &&
+      vars.ENABLE_PR_FROM_ISSUE == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
