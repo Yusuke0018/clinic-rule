@@ -1,17 +1,9 @@
 name: "院内ルールの提案（かんたん）"
-description: "提案・内容や理由・登録者 の3点のみで申請できます。提出後は全員が閲覧できます。"
-title: "[提案] <提案>"
+description: "タイトルに提案を書き、本文は 内容や理由・登録者 の2項目だけで申請できます。提出後は全員が閲覧できます。"
+title: "[提案] <タイトル>"
 labels:
   - proposal
 body:
-  - type: input
-    id: proposal
-    attributes:
-      label: 提案
-      description: 例) LINE返信のルール、採血確認の手順 など（ファイル名は自動生成）
-      placeholder: 例) LINE返信のルール
-    validations:
-      required: true
   - type: textarea
     id: reason
     attributes:

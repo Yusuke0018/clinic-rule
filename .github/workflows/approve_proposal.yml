@@ -35,7 +35,7 @@ jobs:
               core.setFailed(`@${user} に書き込み権限がありません。`);
             }
 
-      - name: Extract fields from Issue body
+      - name: Extract fields from Issue (title/body)
         id: extract
         uses: actions/github-script@v7
         with:
@@ -47,7 +47,8 @@ jobs:
               const m = body.match(re);
               return m ? m[1].trim() : '';
             }
-            const proposal = pick('提案') || pick('proposal');
+            const proposalTitle = (issue.title || '').replace(/^\[提案\]\s*/,'').trim();
+            const proposal = proposalTitle || pick('提案') || pick('proposal');
             const reason = pick('内容や理由') || pick('reason');
             const author = pick('登録者') || pick('author');
             if (!proposal) core.setFailed('提案が取得できません');
