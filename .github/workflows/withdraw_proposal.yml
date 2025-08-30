@@ -1,0 +1,43 @@
+name: Withdraw Proposal (/withdraw)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  withdraw:
+    if: |
+      github.event.issue.state == 'open' &&
+      contains(join(github.event.issue.labels.*.name, ','), 'proposal') &&
+      startsWith(github.event.comment.body, '/withdraw')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure commenter is author or has write
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const commenter = context.payload.comment.user.login;
+            const author = context.payload.issue.user.login;
+            if (commenter === author) return; // OK
+            const { data } = await github.repos.getCollaboratorPermissionLevel({ owner, repo, username: commenter });
+            if (!['admin','write','maintain'].includes(data.permission)) {
+              core.setFailed(`@${commenter} は撤回権限がありません`);
+            }
+
+      - name: Redact and close issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const number = context.payload.issue.number;
+            const commenter = context.payload.comment.user.login;
+            const now = new Date().toISOString();
+            const newTitle = `[削除] ${context.payload.issue.title}`.slice(0, 250);
+            const newBody = `この提案は @${commenter} により ${now} に削除されました。`;
+            await github.issues.update({ owner, repo, issue_number: number, title: newTitle, body: newBody, state: 'closed' });
+            try { await github.issues.addLabels({ owner, repo, issue_number: number, labels: ['withdrawn'] }); } catch {}
+            try { await github.issues.lock({ owner, repo, issue_number: number, lock_reason: 'resolved' }); } catch {}

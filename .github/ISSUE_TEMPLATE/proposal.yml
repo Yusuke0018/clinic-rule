@@ -1,24 +1,32 @@
 name: "院内ルールの提案（かんたん）"
-description: "ルール名と内容だけで申請できます。提出後は全員が閲覧できます。"
-title: "[提案] <ルール名>"
+description: "提案・内容や理由・登録者 の3点のみで申請できます。提出後は全員が閲覧できます。"
+title: "[提案] <提案>"
 labels:
   - proposal
 body:
   - type: input
-    id: rule_name
+    id: proposal
     attributes:
-      label: ルール名
-      description: 例) LINE返信、採血確認 など（ファイル名は自動生成）
-      placeholder: 例) LINE返信
+      label: 提案
+      description: 例) LINE返信のルール、採血確認の手順 など（ファイル名は自動生成）
+      placeholder: 例) LINE返信のルール
     validations:
       required: true
   - type: textarea
-    id: rule_body
+    id: reason
     attributes:
-      label: 内容
-      description: そのまま公開される本文を書いてください（箇条書き可）。
+      label: 内容や理由
+      description: そのまま公開される本文・背景・理由を書いてください（箇条書き可）。
       placeholder: |
-        - 受付は〜
-        - 既読から10分以内に〜
+        - 既読から10分以内に返信する など
+        - 来院中は通知を止める など
+    validations:
+      required: true
+  - type: input
+    id: author
+    attributes:
+      label: 登録者
+      description: 記入者のお名前（苗字のみやイニシャルでも可）
+      placeholder: 例) 山田
     validations:
       required: true

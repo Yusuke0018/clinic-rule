@@ -1,4 +1,4 @@
-name: Approve Proposal to Rules
+name: Approve Proposal to PR
 
 on:
   issue_comment:
@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   apply:
@@ -34,7 +35,7 @@ jobs:
               core.setFailed(`@${user} に書き込み権限がありません。`);
             }
 
-      - name: Extract rule fields from Issue body
+      - name: Extract fields from Issue body
         id: extract
         uses: actions/github-script@v7
         with:
@@ -46,10 +47,12 @@ jobs:
               const m = body.match(re);
               return m ? m[1].trim() : '';
             }
-            const ruleName = pick('ルール名') || pick('rule_name');
-            const ruleBody = pick('内容') || pick('rule_body');
-            if (!ruleName) core.setFailed('ルール名が取得できません');
-            if (!ruleBody) core.setFailed('内容が取得できません');
+            const proposal = pick('提案') || pick('proposal');
+            const reason = pick('内容や理由') || pick('reason');
+            const author = pick('登録者') || pick('author');
+            if (!proposal) core.setFailed('提案が取得できません');
+            if (!reason) core.setFailed('内容や理由が取得できません');
+            if (!author) core.setFailed('登録者が取得できません');
 
             // 引数の明示ファイル名: /approve <path>
             const cmd = context.payload.comment.body.trim();
@@ -65,54 +68,72 @@ jobs:
                 .replace(/\.md$/i,'');
               return base + '.md';
             }
-            const fileName = explicit ? explicit.replace(/^rules\//,'') : toFileName(ruleName);
+            const fileName = explicit ? explicit.replace(/^rules\//,'') : toFileName(proposal);
             const path = `rules/${fileName}`;
 
-            core.setOutput('rule_name', ruleName);
-            core.setOutput('rule_body', ruleBody);
+            core.setOutput('proposal', proposal);
+            core.setOutput('reason', reason);
+            core.setOutput('author', author);
             core.setOutput('path', path);
 
-      - name: Create or update rule file on main
-        id: apply_change
+      - name: Create branch and commit change
+        id: commit
         uses: actions/github-script@v7
         env:
-          RULE_NAME: ${{ steps.extract.outputs.rule_name }}
-          RULE_BODY: ${{ steps.extract.outputs.rule_body }}
+          PROPOSAL: ${{ steps.extract.outputs.proposal }}
+          REASON: ${{ steps.extract.outputs.reason }}
+          AUTHOR: ${{ steps.extract.outputs.author }}
           PATH: ${{ steps.extract.outputs.path }}
         with:
           script: |
-            const path = process.env.PATH;
-            const ruleName = process.env.RULE_NAME;
-            const ruleBody = process.env.RULE_BODY;
             const { owner, repo } = context.repo;
-
-            // fetch existing file sha (if exists)
-            let sha = undefined;
+            const branch = `approve-${context.issue.number}`;
+            const baseRef = 'heads/main';
+            const { data: base } = await github.git.getRef({ owner, repo, ref: baseRef });
+            // create branch if missing
             try {
-              const res = await github.repos.getContent({ owner, repo, path, ref: 'main' });
-              if (!Array.isArray(res.data)) sha = res.data.sha;
+              await github.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: base.object.sha });
             } catch (e) {
-              // not found -> new file
+              if (e.status !== 422) throw e;
             }
 
-            const content = `# ${ruleName}\n\n${ruleBody}\n`;
-            const message = sha
-              ? `feat(rule): update ${path}`
-              : `feat(rule): add ${path}`;
+            const path = process.env.PATH;
+            const proposal = process.env.PROPOSAL;
+            const reason = process.env.REASON;
+            const author = process.env.AUTHOR;
 
-            await github.repos.createOrUpdateFileContents({
-              owner, repo, path,
-              message,
-              content: Buffer.from(content, 'utf8').toString('base64'),
-              branch: 'main',
-              sha,
-            });
+            // fetch existing file sha
+            let sha = undefined;
+            try {
+              const res = await github.repos.getContent({ owner, repo, path, ref: branch });
+              if (!Array.isArray(res.data)) sha = res.data.sha;
+            } catch {}
 
-      - name: Close issue as applied
+            const content = `# ${proposal}\n\n登録者: ${author}\n\n${reason}\n`;
+            const message = sha ? `feat(rule): update ${path}` : `feat(rule): add ${path}`;
+            await github.repos.createOrUpdateFileContents({ owner, repo, path, message, content: Buffer.from(content,'utf8').toString('base64'), branch, sha });
+
+            core.setOutput('branch', branch);
+
+      - name: Open Pull Request (assign owner)
         uses: actions/github-script@v7
+        env:
+          BRANCH: ${{ steps.commit.outputs.branch }}
         with:
           script: |
             const { owner, repo } = context.repo;
-            const number = context.payload.issue.number;
-            await github.issues.createComment({ owner, repo, issue_number: number, body: '承認により反映しました。提案はクローズします。' });
-            await github.issues.update({ owner, repo, issue_number: number, state: 'closed' });
+            const branch = process.env.BRANCH;
+            const number = context.issue.number;
+            const prTitle = `承認: ルール反映 (${branch})`;
+            const prBody = [
+              `このPRはIssue #${number} の /approve から作成されました。`,
+              `マージで公開し、Issueは自動的にクローズされます。`,
+              `Closes #${number}`,
+            ].join('\n');
+            try {
+              const { data: pr } = await github.pulls.create({ owner, repo, title: prTitle, head: branch, base: 'main', body: prBody });
+              // assign repo owner if存在
+              try { await github.issues.addAssignees({ owner, repo, issue_number: pr.number, assignees: [owner] }); } catch {}
+            } catch (e) {
+              if (e.status !== 422) throw e; // PR exists
+            }
