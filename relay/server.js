@@ -375,6 +375,60 @@ app.post("/proposal/withdraw", async (req, res) => {
   }
 });
 
+// Edit proposal: POST {number, token, title, reason, author}
+app.post("/proposal/edit", async (req, res) => {
+  try {
+    const s = readSecrets();
+    const { github_token, github_repo } = s;
+    if (!github_token || !github_repo)
+      return res.status(400).json({ error: "not_configured" });
+    const { number, token, title, reason, author } = req.body || {};
+    const n = String(number || "").trim();
+    const t = String(token || "").trim();
+    if (!n || !t || !title || !reason || !author)
+      return res.status(400).json({ error: "invalid_params" });
+    const map = readProposals();
+    if (!map[n] || map[n].token !== t)
+      return res.status(403).json({ error: "forbidden" });
+    const [owner, repo] = String(github_repo).split("/");
+    const gh = async (method, path, body) => {
+      const r = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}${path}`,
+        {
+          method,
+          headers: {
+            Authorization: `Bearer ${github_token}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "clinic-rule-relay",
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        },
+      );
+      if (!r.ok) {
+        const txt = await r.text();
+        throw new Error(`gh ${method} ${path} ${r.status} ${txt}`);
+      }
+      return r.json();
+    };
+    const body = [
+      `### 内容や理由`,
+      String(reason),
+      ``,
+      `### 登録者`,
+      String(author),
+    ].join("\n");
+    const resp = await gh("PATCH", `/issues/${n}`, {
+      title: `[提案] ${String(title)}`.slice(0, 250),
+      body,
+    });
+    return res.json({ ok: true, url: resp.html_url });
+  } catch (e) {
+    console.error("edit error", e.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+});
+
 // Likes: GET /likes?issues=1,2,3 returns {"1":10,...}
 app.get("/likes", (req, res) => {
   const q = String(req.query.issues || "")
