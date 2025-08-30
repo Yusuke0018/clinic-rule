@@ -158,24 +158,6 @@
       .button:hover {
         filter: brightness(1.1);
       }
-      .like-btn {
-        background: #0b1221;
-        border: 1px solid #13223d;
-        color: var(--text);
-        padding: 6px 10px;
-        border-radius: 8px;
-        cursor: pointer;
-      }
-      .like-btn.liked,
-      .like-btn[disabled].liked {
-        background: #122a1f;
-        border-color: #1b5e3a;
-        color: #86efac;
-      }
-      .like-btn:disabled {
-        opacity: 1;
-        cursor: default;
-      }
       .muted {
         color: var(--muted);
       }
@@ -887,13 +869,8 @@
                   : typeof x.comments === "number"
                     ? x.comments
                     : 0;
-              const baseLikes =
-                typeof x.reactions_plus_one === "number"
-                  ? x.reactions_plus_one
-                  : 0;
               const likes =
-                (likesMap && (likesMap[String(x.number)] || baseLikes)) ||
-                baseLikes;
+                (likesMap && (likesMap[String(x.number)] || 0)) || 0;
               return `
               <section class="card" style="display:grid;gap:10px;" data-issue="${x.number}">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -981,14 +958,10 @@
             const id = btn.getAttribute("data-like");
             const key = `liked-${id}`;
             const liked = localStorage.getItem(key) === "1";
-            if (liked) {
-              btn.setAttribute("disabled", "true");
-              btn.classList.add("liked");
-            }
+            if (liked) btn.setAttribute("disabled", "true");
             btn.addEventListener("click", async () => {
               localStorage.setItem(key, "1");
               btn.setAttribute("disabled", "true");
-              btn.classList.add("liked");
               if (typeof postLike === "function") {
                 try {
                   const r = await postLike(id);
