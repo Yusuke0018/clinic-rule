@@ -458,8 +458,20 @@
                   result.appendChild(btn);
                   form.reset();
                 } else {
-                  result.textContent =
-                    "送信に失敗しました。時間を置いて再度お試しください。";
+                  const msg = json && json.error ? json.error : "unknown_error";
+                  if (msg === "not_configured") {
+                    result.innerHTML =
+                      "送信に失敗（not_configured）。管理画面でGitHub Token/Repoを設定・保存してください。";
+                  } else if (msg === "invalid_params") {
+                    result.innerHTML =
+                      "送信に失敗（invalid_params）。入力内容をご確認ください。";
+                  } else if (msg === "gh_error") {
+                    result.innerHTML =
+                      "送信に失敗（GitHub APIエラー）。トークンの権限（Issues: Read & Write）と有効期限をご確認ください。";
+                  } else {
+                    result.innerHTML =
+                      "送信に失敗しました。時間を置いて再度お試しください。";
+                  }
                 }
               } catch (_) {
                 result.textContent =
@@ -621,8 +633,20 @@
                     list.innerHTML = comments.map(fmt).join("");
                     form.reset();
                   } else {
-                    result.textContent =
-                      "送信に失敗しました。入力内容をご確認の上、時間を置いて再度お試しください。";
+                    const msg = j && j.error ? j.error : "unknown_error";
+                    if (msg === "not_configured") {
+                      result.textContent =
+                        "送信に失敗（not_configured）。管理画面でGitHub Token/Repoを設定してください。";
+                    } else if (msg === "invalid_params") {
+                      result.textContent =
+                        "送信に失敗（invalid_params）。ご意見を入力してください。";
+                    } else if (msg === "gh_error") {
+                      result.textContent =
+                        "送信に失敗（GitHub APIエラー）。トークン権限（Issues: Read & Write）と期限をご確認ください。";
+                    } else {
+                      result.textContent =
+                        "送信に失敗しました。時間を置いて再度お試しください。";
+                    }
                   }
                 } catch (_) {
                   result.textContent = "ネットワークエラーです。";
