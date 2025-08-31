@@ -384,8 +384,15 @@ app.post("/proposal", async (req, res) => {
         lines.push("【ルール提案】審議が開始されました");
         lines.push(`タイトル: ${String(title).slice(0, 120)}`);
         if (author) lines.push(`登録者: ${String(author).slice(0, 40)}`);
-        // リンクはGitHubのIssueへ（安定優先）
-        lines.push(String(json.html_url || ""));
+        // HP（審議中のルート）へのリンクを優先して送信
+        let site = "";
+        try {
+          const [owner, repo] = String(s.github_repo || "").split("/");
+          if (owner && repo) {
+            site = `https://${String(owner).toLowerCase()}.github.io/${repo}/#/pending/${json.number}`;
+          }
+        } catch (_) {}
+        lines.push(site || String(json.html_url || ""));
         const body = lines.join("\n");
         await sendChatwork({
           chatwork_token: s.chatwork_token,
