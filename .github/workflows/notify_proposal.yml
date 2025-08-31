@@ -2,7 +2,7 @@ name: Notify Proposal to Chatwork
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened, labeled, edited, reopened]
 
 permissions:
   issues: read
@@ -10,11 +10,13 @@ permissions:
 
 jobs:
   notify:
+    # issuesイベントのうち、[提案]タイトルまたはproposalラベルが付与されたとき
     if: |
-      github.event_name == 'issues' &&
-      (
+      github.event_name == 'issues' && (
         github.event.action == 'opened' ||
-        (github.event.action == 'labeled' && github.event.label && github.event.label.name == 'proposal')
+        github.event.action == 'reopened' ||
+        (github.event.action == 'labeled' && github.event.label && github.event.label.name == 'proposal') ||
+        github.event.action == 'edited'
       ) && (
         contains(join(github.event.issue.labels.*.name, ','), 'proposal') ||
         startsWith(github.event.issue.title, '[提案]')
