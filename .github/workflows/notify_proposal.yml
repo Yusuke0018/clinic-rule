@@ -34,13 +34,11 @@ jobs:
             let author = '';
             const m = body.match(/###\s*登録者\n([\s\S]*?)(?:\n### |$)/m);
             if (m) author = (m[1] || '').trim();
-            // Build site link (HPの審議中ページ)
-            const [owner, repo] = String(process.env.GITHUB_REPOSITORY || '').split('/');
-            const site = owner && repo ? `https://${owner.toLowerCase()}.github.io/${repo}/#/pending/${issue.number}` : url;
             const lines = [];
             lines.push(`タイトル: ${title}`);
             if (author) lines.push(`登録者: ${author}`);
-            lines.push(site);
+            // 安定性優先のためGitHub Issueリンクを送信
+            lines.push(url);
             core.setOutput('text', lines.join('\n'));
 
       - name: Notify Relay API
