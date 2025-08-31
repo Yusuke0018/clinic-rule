@@ -144,7 +144,9 @@ function ipAllowed(req) {
 // Feature flags / helpers
 function persistLikesEnabled() {
   const { github_token, github_repo } = getSecrets();
-  const flag = String(process.env.PERSIST_LIKES || "").toLowerCase();
+  const f1 = String(process.env.PERSIST_LIKES || "").toLowerCase();
+  const f2 = String(process.env.ENABLE_PERSIST_LIKES || "").toLowerCase();
+  const flag = f1 || f2; // どちらの環境変数名でも有効
   if (flag === "0" || flag === "false") return false;
   if (flag === "1" || flag === "true") return !!(github_token && github_repo);
   // default: disabled unless explicitly enabled

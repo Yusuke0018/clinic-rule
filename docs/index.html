@@ -777,9 +777,11 @@
           await loadConfig();
           const likesMap = await getLikesBulk(nums);
           items.sort((a, b) => {
-            const la = likesMap[String(a.number)] || 0;
-            const lb = likesMap[String(b.number)] || 0;
-            if (lb !== la) return lb - la;
+            const la = likesMap && likesMap[String(a.number)];
+            const lb = likesMap && likesMap[String(b.number)];
+            const laNum = (la ?? 0) | 0;
+            const lbNum = (lb ?? 0) | 0;
+            if (lbNum !== laNum) return lbNum - laNum;
             return new Date(b.created_at) - new Date(a.created_at);
           });
           CONTENT.innerHTML = `
@@ -807,9 +809,8 @@
                 typeof x.reactions_plus_one === "number"
                   ? x.reactions_plus_one
                   : 0;
-              const likes =
-                (likesMap && (likesMap[String(x.number)] || baseLikes)) ||
-                baseLikes;
+              const v = likesMap ? likesMap[String(x.number)] : undefined;
+              const likes = (v ?? baseLikes) | 0;
               return `
               <section class="card" style="display:grid;gap:10px;" data-issue="${x.number}">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -907,6 +908,8 @@
               if (span) span.textContent = `(${Math.max(0, n | 0)})`;
             };
             btn.addEventListener("click", async () => {
+              if (btn.dataset.busy === "1") return;
+              btn.dataset.busy = "1";
               // 楽観的更新（まずはUIを即時反映）
               const wasLiked = localStorage.getItem(key) === "1";
               const current = parseCount();
@@ -924,6 +927,7 @@
                 const r = await postLike(id);
                 if (r && typeof r.count === "number") setCount(r.count);
               } catch (_) {}
+              delete btn.dataset.busy;
             });
           });
         },
