@@ -34,10 +34,13 @@ jobs:
             let author = '';
             const m = body.match(/###\s*登録者\n([\s\S]*?)(?:\n### |$)/m);
             if (m) author = (m[1] || '').trim();
+            // Build site link (HPの審議中ページ)
+            const [owner, repo] = String(process.env.GITHUB_REPOSITORY || '').split('/');
+            const site = owner && repo ? `https://${owner.toLowerCase()}.github.io/${repo}/#/pending/${issue.number}` : url;
             const lines = [];
             lines.push(`タイトル: ${title}`);
             if (author) lines.push(`登録者: ${author}`);
-            lines.push(url);
+            lines.push(site);
             core.setOutput('text', lines.join('\n'));
 
       - name: Notify Relay API
@@ -50,4 +53,3 @@ jobs:
           payload=$(jq -n --arg repo "${GITHUB_REPOSITORY}" --arg event "proposal" --arg text "$TEXT" '{repo:$repo,event:$event,text:$text}')
           sig=$(printf "%s" "$payload" | openssl dgst -sha256 -hmac "$RELAY_SECRET" -binary | xxd -p -c 256)
           curl -sS -X POST "$RELAY_URL/notify" -H "Content-Type: application/json" -H "X-Signature: sha256=$sig" -d "$payload" || true
-
