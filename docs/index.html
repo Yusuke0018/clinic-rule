@@ -428,31 +428,7 @@
         return items;
       };
 
-      const getLikesBulk = async (nums) => {
-        if (!RELAY_URL || !nums || !nums.length) return {};
-        try {
-          const res = await fetch(
-            `${RELAY_URL}/likes?issues=${nums.join(",")}`,
-          );
-          if (!res.ok) return {};
-          return await res.json();
-        } catch (_) {
-          return {};
-        }
-      };
-      const postLike = async (num) => {
-        if (!RELAY_URL) return { ok: false };
-        try {
-          const res = await fetch(`${RELAY_URL}/like`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ issue: num, uid: getUID() }),
-          });
-          return await res.json();
-        } catch (_) {
-          return { ok: false };
-        }
-      };
+      // いいね機能は廃止（UIから排除）
 
       const listRules = async () => {
         await loadConfig();
@@ -672,6 +648,49 @@
               `;
               const form = document.getElementById("op-form");
               const result = document.getElementById("op-result");
+              // 名前の保存/復元
+              const savedName = localStorage.getItem("author_name") || "";
+              const nameInput = document.getElementById("op-name");
+              if (nameInput && savedName) nameInput.value = savedName;
+              nameInput?.addEventListener("input", () => {
+                localStorage.setItem("author_name", nameInput.value.trim());
+              });
+              // かんたん「👍送信」（ページ遷移なし）
+              const quick = document.createElement("div");
+              quick.style = "margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;";
+              quick.innerHTML = '<button type="button" class="button" id="quick-like-here">👍送信</button> <span id="quick-like-msg" class="muted" aria-live="polite"></span>';
+              wrap.appendChild(quick);
+              document.getElementById("quick-like-here")?.addEventListener("click", async (ev) => {
+                const btn = ev.currentTarget;
+                const msg = document.getElementById("quick-like-msg");
+                const author = (document.getElementById("op-name")?.value || localStorage.getItem("author_name") || "").trim();
+                if (!RELAY_URL) {
+                  alert("管理者設定が必要です（relay_url）");
+                  return;
+                }
+                const prev = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = "送信中…";
+                try {
+                  const r = await fetch(`${RELAY_URL}/comment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ issue: n, author, body: "👍" }),
+                  });
+                  if (r.ok) {
+                    if (msg) msg.textContent = "送信しました";
+                    await refreshComments(800);
+                  } else {
+                    if (msg) msg.textContent = "送信に失敗しました";
+                  }
+                } catch (_) {
+                  if (msg) msg.textContent = "ネットワークエラーです";
+                } finally {
+                  setTimeout(() => { if (msg) msg.textContent = ""; }, 1500);
+                  btn.disabled = false;
+                  btn.textContent = prev;
+                }
+              });
               form.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 result.textContent = "送信中…";
@@ -773,17 +792,9 @@
 
           // 一覧ビュー
           const items = await listProposals().catch(() => []);
-          const nums = items.map((x) => x.number);
           await loadConfig();
-          const likesMap = await getLikesBulk(nums);
-          items.sort((a, b) => {
-            const la = likesMap && likesMap[String(a.number)];
-            const lb = likesMap && likesMap[String(b.number)];
-            const laNum = (la ?? 0) | 0;
-            const lbNum = (lb ?? 0) | 0;
-            if (lbNum !== laNum) return lbNum - laNum;
-            return new Date(b.created_at) - new Date(a.created_at);
-          });
+          // 作成日時の新しい順に並べ替え（いいね依存は排除）
+          items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
           CONTENT.innerHTML = `
             <h1>審議中のルール</h1>
             <div id="proposal-list"></div>
@@ -794,6 +805,7 @@
               '<p class="muted">現在、審議中の提案はありません。</p>';
             return;
           }
+          const savedName = localStorage.getItem("author_name") || "";
           wrap.innerHTML = items
             .map((x) => {
               const title = x.title.replace(/^\[提案\]\s*/, "");
@@ -805,12 +817,6 @@
                   : typeof x.comments === "number"
                     ? x.comments
                     : 0;
-              const baseLikes =
-                typeof x.reactions_plus_one === "number"
-                  ? x.reactions_plus_one
-                  : 0;
-              const v = likesMap ? likesMap[String(x.number)] : undefined;
-              const likes = (v ?? baseLikes) | 0;
               return `
               <section class="card" style="display:grid;gap:10px;" data-issue="${x.number}">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -825,8 +831,10 @@
                   <button class="button hide-btn" data-issue="${x.number}">非表示にする</button>
                 </div>
                 <div class="excerpt">${escapeHtml(mdExcerpt(body, 240))}</div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <button data-like="${x.number}" class="like-btn">👍 いいね <span>(${likes})</span></button>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <input class="quick-like-name" placeholder="お名前（任意）" value="${escapeHtml(savedName)}" style="padding:6px 10px;border-radius:8px;border:1px solid #13223d;background:#0b1221;color:var(--text);width:160px" />
+                  <button class="button quick-like" data-issue="${x.number}">👍送信</button>
+                  <span class="muted quick-like-msg" aria-live="polite"></span>
                 </div>
               </section>`;
             })
@@ -893,41 +901,45 @@
             });
           });
 
-          wrap.querySelectorAll(".like-btn").forEach((btn) => {
-            const id = btn.getAttribute("data-like");
-            const key = `liked-${id}`;
-            const span = btn.querySelector("span");
-            const liked = localStorage.getItem(key) === "1";
-            if (liked) btn.classList.add("liked");
-            const parseCount = () => {
-              if (!span) return 0;
-              const m = (span.textContent || "").match(/[0-9]+/);
-              return m ? parseInt(m[0], 10) || 0 : 0;
-            };
-            const setCount = (n) => {
-              if (span) span.textContent = `(${Math.max(0, n | 0)})`;
-            };
+          // 名前保存（一覧の簡易入力）
+          wrap.querySelectorAll(".quick-like-name").forEach((inp) => {
+            inp.addEventListener("input", () => {
+              localStorage.setItem("author_name", inp.value.trim());
+            });
+          });
+          // 一覧の「👍送信」
+          wrap.querySelectorAll(".quick-like").forEach((btn) => {
             btn.addEventListener("click", async () => {
-              if (btn.dataset.busy === "1") return;
-              btn.dataset.busy = "1";
-              // 楽観的更新（まずはUIを即時反映）
-              const wasLiked = localStorage.getItem(key) === "1";
-              const current = parseCount();
-              if (wasLiked) {
-                localStorage.removeItem(key);
-                btn.classList.remove("liked");
-                setCount(current - 1);
-              } else {
-                localStorage.setItem(key, "1");
-                btn.classList.add("liked");
-                setCount(current + 1);
+              if (!RELAY_URL) {
+                alert("管理者設定が必要です（relay_url）");
+                return;
               }
-              // サーバー反映（成功時は正値で上書き）
+              const card = btn.closest("[data-issue]");
+              const n = card?.getAttribute("data-issue");
+              const nameInp = card?.querySelector(".quick-like-name");
+              const author = (nameInp?.value || localStorage.getItem("author_name") || "").trim();
+              const msg = card?.querySelector(".quick-like-msg");
+              const prev = btn.textContent;
+              btn.disabled = true;
+              btn.textContent = "送信中…";
               try {
-                const r = await postLike(id);
-                if (r && typeof r.count === "number") setCount(r.count);
-              } catch (_) {}
-              delete btn.dataset.busy;
+                const r = await fetch(`${RELAY_URL}/comment`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ issue: Number(n), author, body: "👍" }),
+                });
+                if (r.ok) {
+                  if (msg) msg.textContent = "送信しました";
+                } else {
+                  if (msg) msg.textContent = "送信に失敗しました";
+                }
+              } catch (_) {
+                if (msg) msg.textContent = "ネットワークエラーです";
+              } finally {
+                setTimeout(() => { if (msg) msg.textContent = ""; }, 1500);
+                btn.disabled = false;
+                btn.textContent = prev;
+              }
             });
           });
         },
