@@ -286,6 +286,9 @@ app.post("/notify", async (req, res) => {
   if (event === "reminder") {
     lines.push("【未レビューPR リマインダー】");
     lines.push(text || "（該当なし）");
+  } else if (event === "proposal") {
+    lines.push("【ルール提案】審議が開始されました");
+    if (text) lines.push(text);
   } else if (event === "pull_request") {
     lines.push("【ルール改定】PRが承認/マージされました");
     if (linkPR) lines.push(linkPR);
@@ -371,6 +374,26 @@ app.post("/proposal", async (req, res) => {
     const map = readProposals();
     map[String(json.number)] = { token, created_at: Date.now() };
     writeProposals(map);
+
+    // Chatwork通知（設定済みの場合）
+    try {
+      if (s.chatwork_token && s.room_id) {
+        const lines = [];
+        lines.push("【ルール提案】審議が開始されました");
+        lines.push(`タイトル: ${String(title).slice(0, 120)}`);
+        if (author) lines.push(`登録者: ${String(author).slice(0, 40)}`);
+        lines.push(String(json.html_url || ""));
+        const body = lines.join("\n");
+        await sendChatwork({
+          chatwork_token: s.chatwork_token,
+          room_id: s.room_id,
+          body,
+        });
+      }
+    } catch (e) {
+      console.error("proposal notify error", e.message);
+    }
+
     return res
       .status(200)
       .json({ number: json.number, url: json.html_url, token });

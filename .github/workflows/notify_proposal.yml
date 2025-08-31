@@ -1,0 +1,53 @@
+name: Notify Proposal to Chatwork
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: read
+  contents: read
+
+jobs:
+  notify:
+    if: |
+      github.event_name == 'issues' &&
+      (
+        github.event.action == 'opened' ||
+        (github.event.action == 'labeled' && github.event.label && github.event.label.name == 'proposal')
+      ) && (
+        contains(join(github.event.issue.labels.*.name, ','), 'proposal') ||
+        startsWith(github.event.issue.title, '[提案]')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build message
+        id: msg
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title || '';
+            const url = issue.html_url || '';
+            const body = issue.body || '';
+            // Try to extract 登録者 from markdown section
+            let author = '';
+            const m = body.match(/###\s*登録者\n([\s\S]*?)(?:\n### |$)/m);
+            if (m) author = (m[1] || '').trim();
+            const lines = [];
+            lines.push(`タイトル: ${title}`);
+            if (author) lines.push(`登録者: ${author}`);
+            lines.push(url);
+            core.setOutput('text', lines.join('\n'));
+
+      - name: Notify Relay API
+        if: ${{ vars.RELAY_URL && secrets.RELAY_SECRET }}
+        env:
+          RELAY_URL: ${{ vars.RELAY_URL }}
+          RELAY_SECRET: ${{ secrets.RELAY_SECRET }}
+          TEXT: ${{ steps.msg.outputs.text }}
+        run: |
+          payload=$(jq -n --arg repo "${GITHUB_REPOSITORY}" --arg event "proposal" --arg text "$TEXT" '{repo:$repo,event:$event,text:$text}')
+          sig=$(printf "%s" "$payload" | openssl dgst -sha256 -hmac "$RELAY_SECRET" -binary | xxd -p -c 256)
+          curl -sS -X POST "$RELAY_URL/notify" -H "Content-Type: application/json" -H "X-Signature: sha256=$sig" -d "$payload" || true
+
